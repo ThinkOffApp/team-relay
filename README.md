@@ -1,43 +1,77 @@
-# IDE Agent Kit (team-relay) — v0.1 spec
+# IDE Agent Kit — v0.1
 
-Goal: let IDE AIs (Cursor/VS Code agents, local LLM assistants, etc.) participate in team workflows like OpenClaw bots.
+Let IDE AIs (Claude Code, Codex, Cursor, VS Code agents, local LLM assistants) participate in team workflows.
 
-v0.1 is intentionally small. It ships three primitives:
+v0.1 ships three primitives + IDE presets:
 
-1) **Webhook relay**: ingest GitHub webhooks, normalize to one stable JSON task schema, append to a local queue.
-2) **tmux runner**: run an allowed command in a named tmux session, capture output + exit code.
-3) **Receipts**: write an append-only JSON receipt for every action with trace + idempotency.
+1. **Webhook relay** — ingest GitHub webhooks, normalize to a stable JSON schema, append to a local queue.
+2. **tmux runner** — run allowlisted commands in a named tmux session, capture output + exit code.
+3. **Receipts** — append-only JSONL receipts with trace IDs + idempotency keys.
+4. **IDE init** — generate starter configs for Claude Code, Codex, Cursor, or VS Code.
 
-No UI in v0.1.
+No dependencies. Node.js ≥ 18 only.
 
-## Naming/shape freeze (v0.1)
+## Quick start
+
+```bash
+# Clone and init
+git clone https://github.com/ThinkOffApp/team-relay.git
+cd team-relay
+
+# Generate config for your IDE
+node bin/cli.mjs init --ide claude-code   # or: codex, cursor, vscode
+
+# Start webhook server
+node bin/cli.mjs serve
+
+# Run a command in tmux (must be in allowlist)
+node bin/cli.mjs tmux run --cmd "npm test" --session my-session
+
+# View recent receipts
+node bin/cli.mjs receipt tail --n 5
+
+# Send a receipt to a webhook
+node bin/cli.mjs emit --to https://example.com/webhook --json receipt.json
+```
+
+## Naming convention (frozen)
 
 - JSON fields (events, receipts, config): **snake_case**
-- CLI flags: **kebab-case** (mapped to snake_case fields)
+- CLI flags: **kebab-case** (mapped to snake_case internally)
 
-## CLI surface (frozen)
+## CLI
 
-- `team-relay serve`
-  - starts HTTP server for inbound webhooks
-  - appends normalized events to the queue file
+```
+ide-agent-kit serve [--config <path>]
+ide-agent-kit tmux run --cmd <command> [--session <name>] [--cwd <path>] [--timeout-sec <sec>]
+ide-agent-kit emit --to <url> --json <file>
+ide-agent-kit receipt tail [--n <count>]
+ide-agent-kit init [--ide <claude-code|codex|cursor|vscode>]
+```
 
-- `team-relay tmux run --session <name> --cmd "..." [--cwd <path>] [--timeout-sec <sec>]`
-  - runs an allowlisted command inside the tmux session
-  - captures last N lines of stdout/stderr + exit code
-  - appends a receipt
+## Config
 
-- `team-relay emit --to <url> --json <file>`
-  - sends a receipt or event JSON to a webhook target
+See `config/team-relay.example.json` for the full config shape. Key sections:
 
-- `team-relay receipt tail [--n <count>]`
-  - prints the last receipt(s) as JSON
+- `listen` — host/port for webhook server
+- `queue.path` — where normalized events are appended (JSONL)
+- `receipts.path` — where action receipts are appended (JSONL)
+- `tmux.allow` — command allowlist (prefix match)
+- `tmux.default_session` — tmux session name
+- `github.webhook_secret` — HMAC secret for signature verification
+- `github.event_kinds` — which GitHub events to accept
 
 ## Schemas
 
-See:
-- `schemas/event.normalized.json`
-- `schemas/receipt.json`
+- `schemas/event.normalized.json` — normalized inbound event
+- `schemas/receipt.json` — action receipt
 
-## Minimal example flow
+## Tests
 
-See: `examples/flow-pr-opened.md`
+```bash
+node --test test/*.test.mjs
+```
+
+## Example flow
+
+See `examples/flow-pr-opened.md` for a complete PR → test → receipt walkthrough.
