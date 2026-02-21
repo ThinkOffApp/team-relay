@@ -2,10 +2,20 @@
 
 Let IDE AIs (Claude Code, Codex, Cursor, VS Code agents, local LLM assistants) participate in team workflows.
 
-v0.1 ships three primitives + IDE presets:
+## How it works
 
-1. **Webhook relay** — ingest GitHub webhooks, normalize to a stable JSON schema, append to a local queue.
-2. **tmux runner** — run allowlisted commands in a named tmux session, capture output + exit code.
+**Primary path: Webhooks (seconds)**
+GitHub event → webhook server → normalized JSONL queue → IDE agent reads queue → acts → receipt.
+This is the fast path. Events arrive in seconds. Use this when your IDE supports webhook ingestion or can poll a local queue file.
+
+**Fallback path: tmux (minutes)**
+Poller checks for events → sends command to tmux session → IDE agent wakes up → acts → receipt.
+Use this when webhooks aren't available (e.g., no public endpoint) or as a backup.
+
+## v0.1 primitives
+
+1. **Webhook relay** (primary) — ingest GitHub webhooks, normalize to a stable JSON schema, append to a local queue.
+2. **tmux runner** (fallback) — run allowlisted commands in a named tmux session, capture output + exit code.
 3. **Receipts** — append-only JSONL receipts with trace IDs + idempotency keys.
 4. **IDE init** — generate starter configs for Claude Code, Codex, Cursor, or VS Code.
 
