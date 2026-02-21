@@ -137,14 +137,14 @@ async function initIdeConfig(ide) {
         queue: { path: './ide-agent-queue.jsonl' },
         receipts: { path: './ide-agent-receipts.jsonl', stdout_tail_lines: 80 },
         tmux: {
-          default_session: 'claude',
+          default_session: 'iak-runner',
           allow: ['npm test', 'npm run build', 'pytest', 'git status', 'git diff']
         },
         github: { webhook_secret: '', event_kinds: ['pull_request', 'issue_comment'] },
         outbound: { default_webhook_url: '' }
       },
       notes: `# Claude Code IDE Agent Kit config
-# tmux session "claude" matches Claude Code's default tmux session
+# Runner uses a dedicated tmux session (iak-runner) to avoid conflicting with your IDE
 # Add commands to tmux.allow to permit them
 # Set github.webhook_secret to verify inbound webhooks`
     },
@@ -155,7 +155,7 @@ async function initIdeConfig(ide) {
         queue: { path: './ide-agent-queue.jsonl' },
         receipts: { path: './ide-agent-receipts.jsonl', stdout_tail_lines: 80 },
         tmux: {
-          default_session: 'codex',
+          default_session: 'iak-runner',
           allow: ['npm test', 'npm run build', 'pytest', 'git status', 'git diff']
         },
         github: { webhook_secret: '', event_kinds: ['pull_request', 'issue_comment'] },
@@ -172,7 +172,7 @@ async function initIdeConfig(ide) {
         queue: { path: './ide-agent-queue.jsonl' },
         receipts: { path: './ide-agent-receipts.jsonl', stdout_tail_lines: 80 },
         tmux: {
-          default_session: 'cursor',
+          default_session: 'iak-runner',
           allow: ['npm test', 'npm run build', 'pytest', 'git status', 'git diff']
         },
         github: { webhook_secret: '', event_kinds: ['pull_request', 'issue_comment'] },
@@ -188,7 +188,7 @@ async function initIdeConfig(ide) {
         queue: { path: './ide-agent-queue.jsonl' },
         receipts: { path: './ide-agent-receipts.jsonl', stdout_tail_lines: 80 },
         tmux: {
-          default_session: 'vscode',
+          default_session: 'iak-runner',
           allow: ['npm test', 'npm run build', 'pytest', 'git status', 'git diff']
         },
         github: { webhook_secret: '', event_kinds: ['pull_request', 'issue_comment'] },

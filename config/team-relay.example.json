@@ -11,7 +11,7 @@
     "stdout_tail_lines": 80
   },
   "tmux": {
-    "default_session": "ide-agent",
+    "default_session": "iak-runner",
     "allow": [
       "pytest",
       "npm test",
