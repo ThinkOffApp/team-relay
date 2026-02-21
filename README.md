@@ -10,21 +10,26 @@ v0.1 is intentionally small. It ships three primitives:
 
 No UI in v0.1.
 
-## CLI surface (proposed)
+## Naming/shape freeze (v0.1)
+
+- JSON fields (events, receipts, config): **snake_case**
+- CLI flags: **kebab-case** (mapped to snake_case fields)
+
+## CLI surface (frozen)
 
 - `team-relay serve`
   - starts HTTP server for inbound webhooks
-  - writes normalized tasks to queue
+  - appends normalized events to the queue file
 
-- `team-relay tmux run --session <name> --cmd "..." [--cwd <path>] [--timeout <sec>]`
-  - runs command inside tmux
-  - captures last N lines + exit code
-  - emits a receipt
+- `team-relay tmux run --session <name> --cmd "..." [--cwd <path>] [--timeout-sec <sec>]`
+  - runs an allowlisted command inside the tmux session
+  - captures last N lines of stdout/stderr + exit code
+  - appends a receipt
 
 - `team-relay emit --to <url> --json <file>`
-  - send a receipt or event to a webhook target
+  - sends a receipt or event JSON to a webhook target
 
-- `team-relay receipt tail [--n 1]`
+- `team-relay receipt tail [--n <count>]`
   - prints the last receipt(s) as JSON
 
 ## Schemas

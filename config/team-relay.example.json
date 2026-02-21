@@ -8,10 +8,10 @@
   },
   "receipts": {
     "path": "./team-relay-receipts.jsonl",
-    "stdoutTailLines": 80
+    "stdout_tail_lines": 80
   },
   "tmux": {
-    "defaultSession": "ide-agent",
+    "default_session": "ide-agent",
     "allow": [
       "pytest",
       "npm test",
@@ -20,8 +20,8 @@
     ]
   },
   "github": {
-    "webhookSecret": "CHANGE_ME",
-    "eventKinds": [
+    "webhook_secret": "CHANGE_ME",
+    "event_kinds": [
       "pull_request",
       "issue_comment",
       "check_suite",
@@ -29,6 +29,6 @@
     ]
   },
   "outbound": {
-    "defaultWebhookUrl": "https://example.com/webhook"
+    "default_webhook_url": "https://example.com/webhook"
   }
 }

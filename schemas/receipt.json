@@ -21,7 +21,8 @@
         "kind": {"type": "string", "enum": ["tmux.run", "webhook.emit", "task.ack"]},
         "session": {"type": "string"},
         "cmd": {"type": "string"},
-        "cwd": {"type": "string"}
+        "cwd": {"type": "string"},
+        "timeout_sec": {"type": ["integer", "null"], "description": "Wall-clock timeout for the action (when applicable)."}
       }
     },
     "input_refs": {"type": "array", "items": {"type": "string"}},

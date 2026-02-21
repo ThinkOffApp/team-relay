@@ -11,7 +11,7 @@ An IDE agent reads the queue file, sees a new event, and decides to run tests.
 ## 3) Execute via tmux
 Command:
 
-`team-relay tmux run --session ide-agent --cmd "npm test" --timeout 120`
+`team-relay tmux run --session ide-agent --cmd "npm test" --timeout-sec 120`
 
 The runner:
 - ensures the command is allowlisted
