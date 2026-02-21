@@ -1,0 +1,34 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 8787
+  },
+  "queue": {
+    "path": "./team-relay-queue.jsonl"
+  },
+  "receipts": {
+    "path": "./team-relay-receipts.jsonl",
+    "stdoutTailLines": 80
+  },
+  "tmux": {
+    "defaultSession": "ide-agent",
+    "allow": [
+      "pytest",
+      "npm test",
+      "npm run build",
+      "git status"
+    ]
+  },
+  "github": {
+    "webhookSecret": "CHANGE_ME",
+    "eventKinds": [
+      "pull_request",
+      "issue_comment",
+      "check_suite",
+      "workflow_run"
+    ]
+  },
+  "outbound": {
+    "defaultWebhookUrl": "https://example.com/webhook"
+  }
+}

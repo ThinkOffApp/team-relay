@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TeamRelayReceipt",
+  "type": "object",
+  "required": ["trace_id", "idempotency_key", "actor", "action", "status", "started_at"],
+  "properties": {
+    "trace_id": {"type": "string"},
+    "idempotency_key": {"type": "string"},
+    "actor": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "kind": {"type": "string", "enum": ["ide-agent", "bot", "human"], "default": "ide-agent"}
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["tmux.run", "webhook.emit", "task.ack"]},
+        "session": {"type": "string"},
+        "cmd": {"type": "string"},
+        "cwd": {"type": "string"}
+      }
+    },
+    "input_refs": {"type": "array", "items": {"type": "string"}},
+    "output_refs": {"type": "array", "items": {"type": "string"}},
+    "status": {"type": "string", "enum": ["ok", "error", "timeout", "skipped"]},
+    "exit_code": {"type": ["integer", "null"]},
+    "stdout_tail": {"type": "string"},
+    "stderr_tail": {"type": "string"},
+    "notes": {"type": "string"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": ["string", "null"], "format": "date-time"}
+  }
+}
