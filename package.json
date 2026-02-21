@@ -4,7 +4,8 @@
   "description": "Let IDE AIs participate in team workflows — webhook relay, tmux runner, receipts",
   "type": "module",
   "bin": {
-    "ide-agent-kit": "./bin/cli.mjs"
+    "ide-agent-kit": "./bin/cli.mjs",
+    "ide-antfarm-poller": "./bin/antfarm-poller.mjs"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
