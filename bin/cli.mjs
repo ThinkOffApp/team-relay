@@ -6,6 +6,7 @@ import { tailReceipts } from '../src/receipt.mjs';
 import { startWebhookServer } from '../src/webhook-server.mjs';
 import { emitJson } from '../src/emit.mjs';
 import { watchQueue } from '../src/watch.mjs';
+import { startRoomPoller } from '../src/room-poller.mjs';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -30,6 +31,10 @@ Usage:
   ide-agent-kit watch [--config <path>]
     Watch the event queue and nudge IDE tmux session on new events.
     Uses fs.watch for instant reaction (no polling delay).
+
+  ide-agent-kit poll --rooms <room1,room2> --api-key <key> --handle <@handle> [--interval <sec>] [--config <path>]
+    Poll Ant Farm rooms directly and nudge IDE tmux session on new messages.
+    No webhooks required — works anywhere with curl and tmux.
 
   ide-agent-kit init [--ide <claude-code|codex|cursor|vscode|gemini>]
     Generate starter config for your IDE.
@@ -129,6 +134,24 @@ async function main() {
     });
     // Keep process alive
     process.on('SIGINT', () => { console.log('\nStopping watcher.'); process.exit(0); });
+    return;
+  }
+
+  if (command === 'poll') {
+    const opts = parseKV(args, 'poll');
+    if (!opts.rooms || !opts['api-key'] || !opts.handle) {
+      console.error('Error: --rooms, --api-key, and --handle are required');
+      console.error('Example: ide-agent-kit poll --rooms thinkoff-development,feature-admin-planning --api-key <key> --handle @claudemm');
+      process.exit(1);
+    }
+    const config = loadConfig(opts.config);
+    await startRoomPoller({
+      rooms: opts.rooms.split(','),
+      apiKey: opts['api-key'],
+      handle: opts.handle,
+      interval: opts.interval ? parseInt(opts.interval) : undefined,
+      config
+    });
     return;
   }
 
