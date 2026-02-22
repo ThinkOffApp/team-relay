@@ -1,117 +1,137 @@
-import { execSync } from 'node:child_process';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 /**
  * OpenClaw Exec Approvals — Governance layer for agent command execution.
  *
- * Maps to OpenClaw's 3-layer safety interlock:
- *   Policy → Allowlist → User/Judge Approval
+ * Since the gateway uses WebSocket for RPC (not HTTP), this module manages
+ * approvals via a local JSON file that both team-relay and judge-core can read/write.
  *
- * Integration with thinkoff-judge-core:
- *   The judge module can act as an approval provider, where governance
- *   proposals become approval requests and judge verdicts become decisions.
+ * The approval workflow:
+ *   1. Agent requests approval → written to approvals.json with status "pending"
+ *   2. Judge (or admin) reviews → resolves with allow/deny
+ *   3. Agent checks status before executing
  *
- * RPC methods:
- *   - exec.approval.request  — create an approval request
- *   - exec.approval.waitDecision — await decision on pending request
- *   - exec.approval.resolve  — resolve with allow/deny
- *   - exec.approval.list     — list pending approvals
+ * This also reads OpenClaw's native exec-approvals.json for allowlist integration.
+ *
+ * Files:
+ *   ~/.openclaw/exec-approvals.json — OpenClaw native allowlist (per-agent, glob-based)
+ *   ./exec-approvals.json           — team-relay approval queue
  */
 
-const DEFAULTS = {
-  host: '127.0.0.1',
-  port: 18791,
-  token: ''
-};
+const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '/Users/family/.openclaw';
 
-function resolveGateway(config, options = {}) {
-  return {
-    host: options.host || config?.openclaw?.host || DEFAULTS.host,
-    port: options.port || config?.openclaw?.port || DEFAULTS.port,
-    token: options.token || config?.openclaw?.token || DEFAULTS.token
-  };
+function resolveApprovalFile(config) {
+  return config?.exec?.approvalFile || './exec-approvals.json';
 }
 
-async function rpc(config, method, params, options = {}, timeoutMs = 30000) {
-  const gw = resolveGateway(config, options);
-  const url = `http://${gw.host}:${gw.port}/rpc`;
-  const headers = { 'Content-Type': 'application/json' };
-  if (gw.token) headers['Authorization'] = `Bearer ${gw.token}`;
-
-  const headerArgs = Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ');
-  const body = JSON.stringify({ method, params });
-  const bodyArg = `-d '${body.replace(/'/g, "'\\''")}'`;
-  const cmd = `curl -sS -X POST ${headerArgs} ${bodyArg} "${url}"`;
-
+function loadApprovals(filePath) {
   try {
-    const result = execSync(cmd, { encoding: 'utf8', timeout: timeoutMs });
-    try { return { ok: true, data: JSON.parse(result) }; }
-    catch { return { ok: true, data: result.trim() }; }
-  } catch (e) {
-    return { ok: false, error: e.message };
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return { approvals: [] };
   }
+}
+
+function saveApprovals(filePath, data) {
+  const dir = dirname(filePath);
+  if (dir !== '.' && !existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
 }
 
 /**
  * Request approval for a command execution.
- *
- * @param {object} config
- * @param {object} params - { command, cwd?, agentId?, sessionKey?, security?, timeoutMs?, twoPhase? }
- * @param {object} options
- * @returns {object} { requestId, status }
  */
 export async function execApprovalRequest(config, params, options = {}) {
-  return rpc(config, 'exec.approval.request', {
+  const filePath = resolveApprovalFile(config);
+  const data = loadApprovals(filePath);
+
+  const request = {
+    requestId: randomUUID(),
     command: params.command,
-    ...(params.cwd && { cwd: params.cwd }),
-    ...(params.agentId && { agentId: params.agentId }),
-    ...(params.sessionKey && { sessionKey: params.sessionKey }),
-    ...(params.security && { security: params.security }),
-    ...(params.timeoutMs && { timeoutMs: params.timeoutMs }),
-    ...(params.twoPhase !== undefined && { twoPhase: params.twoPhase })
-  }, options);
+    cwd: params.cwd || process.cwd(),
+    agentId: params.agentId || 'unknown',
+    reason: params.reason || '',
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+    decision: null,
+    resolvedBy: null
+  };
+
+  data.approvals.push(request);
+  saveApprovals(filePath, data);
+
+  return { ok: true, data: { requestId: request.requestId, status: 'pending' } };
 }
 
 /**
- * Wait for a decision on a pending approval request.
- *
- * @param {object} config
- * @param {object} params - { requestId, timeoutMs? }
- * @param {object} options
- * @returns {object} { decision: 'allow-once'|'allow-always'|'deny', resolvedBy }
+ * Wait for a decision on a pending approval request (polls file).
  */
 export async function execApprovalWait(config, params, options = {}) {
+  const filePath = resolveApprovalFile(config);
   const timeout = params.timeoutMs || 60000;
-  return rpc(config, 'exec.approval.waitDecision', {
-    requestId: params.requestId,
-    ...(params.timeoutMs && { timeoutMs: params.timeoutMs })
-  }, options, timeout + 5000);
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    const data = loadApprovals(filePath);
+    const req = data.approvals.find(a => a.requestId === params.requestId);
+    if (!req) return { ok: false, error: 'Request not found' };
+    if (req.status !== 'pending') {
+      return { ok: true, data: { decision: req.decision, resolvedBy: req.resolvedBy, resolvedAt: req.resolvedAt } };
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
+  return { ok: false, error: 'Timeout waiting for decision' };
 }
 
 /**
  * Resolve a pending approval request.
- *
- * @param {object} config
- * @param {object} params - { requestId, decision ('allow-once'|'allow-always'|'deny'), reason? }
- * @param {object} options
  */
 export async function execApprovalResolve(config, params, options = {}) {
-  return rpc(config, 'exec.approval.resolve', {
-    requestId: params.requestId,
-    decision: params.decision,
-    ...(params.reason && { reason: params.reason })
-  }, options);
+  const filePath = resolveApprovalFile(config);
+  const data = loadApprovals(filePath);
+
+  const req = data.approvals.find(a => a.requestId === params.requestId);
+  if (!req) return { ok: false, error: 'Request not found' };
+  if (req.status !== 'pending') return { ok: false, error: `Already resolved: ${req.decision}` };
+
+  req.status = 'resolved';
+  req.decision = params.decision;
+  req.resolvedBy = params.resolvedBy || 'admin';
+  req.resolvedAt = new Date().toISOString();
+  if (params.reason) req.resolveReason = params.reason;
+
+  saveApprovals(filePath, data);
+
+  return { ok: true, data: { requestId: req.requestId, decision: req.decision } };
 }
 
 /**
- * List pending approval requests.
- *
- * @param {object} config
- * @param {object} params - { agentId?, status? ('pending'|'resolved'|'all') }
- * @param {object} options
+ * List approval requests.
  */
 export async function execApprovalList(config, params = {}, options = {}) {
-  return rpc(config, 'exec.approval.list', {
-    ...(params.agentId && { agentId: params.agentId }),
-    ...(params.status && { status: params.status })
-  }, options);
+  const filePath = resolveApprovalFile(config);
+  const data = loadApprovals(filePath);
+
+  let results = data.approvals || [];
+  if (params.agentId) results = results.filter(a => a.agentId === params.agentId);
+  if (params.status && params.status !== 'all') results = results.filter(a => a.status === params.status);
+
+  return { ok: true, data: results };
+}
+
+/**
+ * Read OpenClaw's native exec-approvals.json (allowlists).
+ */
+export async function execAllowlistGet(config, options = {}) {
+  const filePath = join(OPENCLAW_DATA, 'exec-approvals.json');
+  try {
+    const data = JSON.parse(readFileSync(filePath, 'utf8'));
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: 'No OpenClaw exec-approvals.json found' };
+  }
 }

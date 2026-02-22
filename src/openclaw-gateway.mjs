@@ -1,146 +1,162 @@
 import { execSync } from 'node:child_process';
 
 /**
- * OpenClaw Gateway Client — HTTP interface to the local OpenClaw gateway.
+ * OpenClaw Gateway Client — uses `openclaw` CLI for reliable communication.
  *
- * Provides access to:
- *   - POST /hooks/agent  — trigger an isolated agent turn
- *   - POST /hooks/wake   — wake an agent's main session
- *   - GET  /health       — health check
- *   - RPC config.get / config.patch — read/modify gateway config
+ * The gateway uses WebSocket (not HTTP) for RPC, so we shell out to the
+ * `openclaw` CLI which handles auth and transport correctly.
  *
- * All methods accept a `gateway` options object:
- *   { host, port, token }
+ * For environments where `openclaw` runs under a different user (e.g., family),
+ * set openclaw.ssh in config to route via SSH.
  *
- * Default: localhost:18791 (matches our Mac mini setup).
+ * Config:
+ *   openclaw.home  — OPENCLAW_HOME path (default: /Users/family/openclaw)
+ *   openclaw.ssh   — SSH target for remote execution (e.g., "family@localhost")
+ *   openclaw.bin   — Path to openclaw binary (default: /opt/homebrew/bin/openclaw)
  */
 
 const DEFAULTS = {
-  host: '127.0.0.1',
-  port: 18791,
-  token: ''
+  home: '/Users/family/openclaw',
+  bin: '/opt/homebrew/bin/openclaw',
+  ssh: 'family@localhost'
 };
 
-function resolveGateway(config, options = {}) {
+function resolveOC(config, options = {}) {
   return {
-    host: options.host || config?.openclaw?.host || DEFAULTS.host,
-    port: options.port || config?.openclaw?.port || DEFAULTS.port,
-    token: options.token || config?.openclaw?.token || DEFAULTS.token
+    home: options.home || config?.openclaw?.home || DEFAULTS.home,
+    bin: options.bin || config?.openclaw?.bin || DEFAULTS.bin,
+    ssh: options.ssh || config?.openclaw?.ssh || DEFAULTS.ssh
   };
 }
 
-function baseUrl(gw) {
-  return `http://${gw.host}:${gw.port}`;
-}
+function ocExec(oc, subcommand, timeoutMs = 30000) {
+  const envPrefix = `export PATH=/opt/homebrew/bin:$PATH && export OPENCLAW_HOME=${oc.home}`;
+  const cmd = oc.ssh
+    ? `ssh ${oc.ssh} '${envPrefix} && ${oc.bin} ${subcommand}'`
+    : `${envPrefix} && ${oc.bin} ${subcommand}`;
 
-function authHeaders(gw) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (gw.token) headers['Authorization'] = `Bearer ${gw.token}`;
-  return headers;
-}
-
-async function gwFetch(url, method, body, gw, timeoutMs = 30000) {
-  const headers = authHeaders(gw);
-  const headerArgs = Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ');
-  const bodyArg = body ? `-d '${JSON.stringify(body).replace(/'/g, "'\\''")}'` : '';
-
-  const cmd = `curl -sS -X ${method} ${headerArgs} ${bodyArg} "${url}"`;
   try {
-    const result = execSync(cmd, { encoding: 'utf8', timeout: timeoutMs });
+    const result = execSync(cmd, { encoding: 'utf8', timeout: timeoutMs, stdio: ['pipe', 'pipe', 'pipe'] });
+    // Try to parse as JSON, fall back to raw text
     try {
       return { ok: true, data: JSON.parse(result) };
     } catch {
       return { ok: true, data: result.trim() };
     }
   } catch (e) {
+    const stderr = e.stderr ? e.stderr.toString().trim() : '';
+    const stdout = e.stdout ? e.stdout.toString().trim() : '';
+    return { ok: false, error: stderr || stdout || e.message };
+  }
+}
+
+/**
+ * Trigger an agent turn via CLI.
+ * `openclaw agent --message <text> --agent <id> --json`
+ */
+export async function triggerAgent(config, params, options = {}) {
+  const oc = resolveOC(config, options);
+  const agentArg = params.agentId ? `--agent ${params.agentId}` : '';
+  const modelArg = params.model ? `--model ${params.model}` : '';
+  // Escape the message for shell
+  const safeMsg = params.message.replace(/'/g, "'\\''");
+  return ocExec(oc, `agent --message '${safeMsg}' ${agentArg} ${modelArg} --json`, 120000);
+}
+
+/**
+ * Check gateway health.
+ * `openclaw status`
+ */
+export async function healthCheck(config, options = {}) {
+  const oc = resolveOC(config, options);
+  return ocExec(oc, 'status', 15000);
+}
+
+/**
+ * Deep health check with probes.
+ * `openclaw status --deep`
+ */
+export async function healthDeep(config, options = {}) {
+  const oc = resolveOC(config, options);
+  return ocExec(oc, 'status --deep', 30000);
+}
+
+/**
+ * List all configured agents.
+ * `openclaw agents list`
+ */
+export async function agentsList(config, options = {}) {
+  const oc = resolveOC(config, options);
+  return ocExec(oc, 'agents list', 15000);
+}
+
+/**
+ * Get gateway configuration.
+ * Reads openclaw.json directly.
+ */
+export async function configGet(config, options = {}) {
+  const oc = resolveOC(config, options);
+  const cmd = oc.ssh
+    ? `ssh ${oc.ssh} 'cat ${oc.home}/openclaw.json'`
+    : `cat ${oc.home}/openclaw.json`;
+  try {
+    const result = execSync(cmd, { encoding: 'utf8', timeout: 10000 });
+    return { ok: true, data: JSON.parse(result) };
+  } catch (e) {
     return { ok: false, error: e.message };
   }
 }
 
 /**
- * POST /hooks/agent — Run an isolated agent turn.
- * Returns 202 (async execution).
- *
- * @param {object} config - IDE Agent Kit config
- * @param {object} params - { message, agentId, sessionKey?, model?, thinking?, timeoutSeconds?, deliver?, channel?, to? }
- * @param {object} options - { host?, port?, token? }
- */
-export async function triggerAgent(config, params, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/hooks/agent`;
-  const body = {
-    message: params.message,
-    agentId: params.agentId,
-    ...(params.sessionKey && { sessionKey: params.sessionKey }),
-    ...(params.model && { model: params.model }),
-    ...(params.thinking !== undefined && { thinking: params.thinking }),
-    ...(params.timeoutSeconds && { timeoutSeconds: params.timeoutSeconds }),
-    ...(params.deliver && { deliver: params.deliver }),
-    ...(params.channel && { channel: params.channel }),
-    ...(params.to && { to: params.to }),
-    ...(params.wakeMode && { wakeMode: params.wakeMode })
-  };
-  return gwFetch(url, 'POST', body, gw);
-}
-
-/**
- * POST /hooks/wake — Enqueue a system event for the main session.
- *
- * @param {object} config
- * @param {object} params - { text, mode? ('now'|'next-heartbeat') }
- * @param {object} options
- */
-export async function wakeAgent(config, params, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/hooks/wake`;
-  const body = {
-    text: params.text,
-    ...(params.mode && { mode: params.mode })
-  };
-  return gwFetch(url, 'POST', body, gw);
-}
-
-/**
- * GET /health — Check gateway health.
- */
-export async function healthCheck(config, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/health`;
-  return gwFetch(url, 'GET', null, gw, 5000);
-}
-
-/**
- * RPC config.get — Read gateway configuration.
- */
-export async function configGet(config, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/rpc`;
-  return gwFetch(url, 'POST', { method: 'config.get', params: {} }, gw);
-}
-
-/**
- * RPC config.patch — Patch gateway configuration.
+ * Patch gateway configuration (merge into openclaw.json).
+ * Reads current, deep-merges patch, writes back.
  */
 export async function configPatch(config, patch, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/rpc`;
-  return gwFetch(url, 'POST', { method: 'config.patch', params: { patch } }, gw);
+  const current = await configGet(config, options);
+  if (!current.ok) return current;
+
+  const oc = resolveOC(config, options);
+  const merged = deepMerge(current.data, patch);
+  const json = JSON.stringify(merged, null, 2);
+  const safeJson = json.replace(/'/g, "'\\''");
+
+  const cmd = oc.ssh
+    ? `ssh ${oc.ssh} "echo '${safeJson}' > ${oc.home}/openclaw.json"`
+    : `echo '${safeJson}' > ${oc.home}/openclaw.json`;
+  try {
+    execSync(cmd, { encoding: 'utf8', timeout: 10000 });
+    return { ok: true, data: merged, action: 'patched' };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function deepMerge(target, source) {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      result[key] = deepMerge(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
 }
 
 /**
- * RPC agents.list — List all configured agents.
+ * Restart the gateway.
+ * `openclaw gateway --force &`
  */
-export async function agentsList(config, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/rpc`;
-  return gwFetch(url, 'POST', { method: 'agents.list', params: {} }, gw);
-}
-
-/**
- * RPC health.deep — Deep health check with channel status.
- */
-export async function healthDeep(config, options = {}) {
-  const gw = resolveGateway(config, options);
-  const url = `${baseUrl(gw)}/rpc`;
-  return gwFetch(url, 'POST', { method: 'health.deep', params: {} }, gw);
+export async function gatewayRestart(config, options = {}) {
+  const oc = resolveOC(config, options);
+  const envPrefix = `export PATH=/opt/homebrew/bin:$PATH && export OPENCLAW_HOME=${oc.home}`;
+  const cmd = oc.ssh
+    ? `ssh ${oc.ssh} '${envPrefix} && nohup ${oc.bin} gateway --force > /tmp/gw_restart.log 2>&1 &'`
+    : `${envPrefix} && nohup ${oc.bin} gateway --force > /tmp/gw_restart.log 2>&1 &`;
+  try {
+    execSync(cmd, { encoding: 'utf8', timeout: 10000 });
+    return { ok: true, action: 'restart initiated' };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }

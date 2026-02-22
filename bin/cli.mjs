@@ -8,7 +8,7 @@ import { emitJson } from '../src/emit.mjs';
 import { watchQueue } from '../src/watch.mjs';
 import { startRoomPoller } from '../src/room-poller.mjs';
 import { memoryList, memoryGet, memorySet, memoryAppend, memoryDelete, memorySearch } from '../src/memory.mjs';
-import { triggerAgent, wakeAgent, healthCheck, healthDeep, agentsList, configGet, configPatch } from '../src/openclaw-gateway.mjs';
+import { triggerAgent, healthCheck, healthDeep, agentsList, configGet, configPatch, gatewayRestart } from '../src/openclaw-gateway.mjs';
 import { sessionsSend, sessionsSpawn, sessionsList, sessionsHistory, sessionsStatus } from '../src/openclaw-sessions.mjs';
 import { execApprovalRequest, execApprovalWait, execApprovalResolve, execApprovalList } from '../src/openclaw-exec.mjs';
 import { listHooks, createForwarderHook, deleteHook } from '../src/openclaw-hooks.mjs';
@@ -102,7 +102,7 @@ function parseKV(args, after) {
 
 function gwOpts(opts) {
   return {
-    host: opts.host, port: opts.port ? parseInt(opts.port) : undefined, token: opts.token
+    home: opts.home, ssh: opts.ssh, bin: opts.bin
   };
 }
 
@@ -246,6 +246,7 @@ async function main() {
     if (subcommand === 'search') {
       if (!opts.query) { console.error('Error: --query is required'); process.exit(1); }
       const result = memorySearch(config, opts.query, {
+        ...memOpts,
         ...gwOpts(opts),
         maxResults: opts['max-results'] ? parseInt(opts['max-results']) : undefined,
         minScore: opts['min-score'] ? parseFloat(opts['min-score']) : undefined
@@ -309,13 +310,12 @@ async function main() {
       console.log(JSON.stringify(result.data || result, null, 2));
       return;
     }
-    if (subcommand === 'wake') {
-      if (!opts.text) { console.error('Error: --text is required'); process.exit(1); }
-      const result = await wakeAgent(config, { text: opts.text, mode: opts.mode }, gw);
+    if (subcommand === 'restart') {
+      const result = await gatewayRestart(config, gw);
       console.log(JSON.stringify(result.data || result, null, 2));
       return;
     }
-    console.error('Usage: ide-agent-kit gateway <health|health-deep|agents|config-get|config-patch|trigger|wake>');
+    console.error('Usage: ide-agent-kit gateway <health|health-deep|agents|config-get|config-patch|trigger|restart>');
     process.exit(1);
   }
 

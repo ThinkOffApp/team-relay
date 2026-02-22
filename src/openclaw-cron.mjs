@@ -1,62 +1,44 @@
 import { execSync } from 'node:child_process';
 
 /**
- * OpenClaw Cron — Scheduled task management via gateway RPC.
+ * OpenClaw Cron — Scheduled task management via CLI.
  *
- * Provides:
- *   - cronList   — list all cron jobs
- *   - cronAdd    — add a new scheduled job
- *   - cronUpdate — update an existing job
- *   - cronRemove — remove a job
- *   - cronRun    — trigger immediate execution
- *   - cronStatus — get cron system status
+ * Uses `openclaw cron` CLI commands since the gateway uses WebSocket for RPC.
  *
- * Schedule types:
- *   - at: one-shot ISO 8601 timestamp
- *   - every: interval in milliseconds
- *   - cron: 5/6-field cron expression with timezone
- *
- * Session modes:
- *   - main: system event in main session
- *   - isolated: dedicated agent turn
- *
- * Delivery:
- *   - announce: direct channel output
- *   - webhook: POST to URL
- *   - none: silent
+ * Config:
+ *   openclaw.home  — OPENCLAW_HOME path
+ *   openclaw.ssh   — SSH target (e.g., "family@localhost")
+ *   openclaw.bin   — Path to openclaw binary
  */
 
 const DEFAULTS = {
-  host: '127.0.0.1',
-  port: 18791,
-  token: ''
+  home: '/Users/family/openclaw',
+  bin: '/opt/homebrew/bin/openclaw',
+  ssh: 'family@localhost'
 };
 
-function resolveGateway(config, options = {}) {
+function resolveOC(config, options = {}) {
   return {
-    host: options.host || config?.openclaw?.host || DEFAULTS.host,
-    port: options.port || config?.openclaw?.port || DEFAULTS.port,
-    token: options.token || config?.openclaw?.token || DEFAULTS.token
+    home: options.home || config?.openclaw?.home || DEFAULTS.home,
+    bin: options.bin || config?.openclaw?.bin || DEFAULTS.bin,
+    ssh: options.ssh || config?.openclaw?.ssh || DEFAULTS.ssh
   };
 }
 
-async function rpc(config, method, params, options = {}, timeoutMs = 30000) {
-  const gw = resolveGateway(config, options);
-  const url = `http://${gw.host}:${gw.port}/rpc`;
-  const headers = { 'Content-Type': 'application/json' };
-  if (gw.token) headers['Authorization'] = `Bearer ${gw.token}`;
-
-  const headerArgs = Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(' ');
-  const body = JSON.stringify({ method, params });
-  const bodyArg = `-d '${body.replace(/'/g, "'\\''")}'`;
-  const cmd = `curl -sS -X POST ${headerArgs} ${bodyArg} "${url}"`;
+function ocExec(oc, subcommand, timeoutMs = 30000) {
+  const envPrefix = `export PATH=/opt/homebrew/bin:$PATH && export OPENCLAW_HOME=${oc.home}`;
+  const cmd = oc.ssh
+    ? `ssh ${oc.ssh} '${envPrefix} && ${oc.bin} ${subcommand}'`
+    : `${envPrefix} && ${oc.bin} ${subcommand}`;
 
   try {
-    const result = execSync(cmd, { encoding: 'utf8', timeout: timeoutMs });
+    const result = execSync(cmd, { encoding: 'utf8', timeout: timeoutMs, stdio: ['pipe', 'pipe', 'pipe'] });
     try { return { ok: true, data: JSON.parse(result) }; }
     catch { return { ok: true, data: result.trim() }; }
   } catch (e) {
-    return { ok: false, error: e.message };
+    const stderr = e.stderr ? e.stderr.toString().trim() : '';
+    const stdout = e.stdout ? e.stdout.toString().trim() : '';
+    return { ok: false, error: stderr || stdout || e.message };
   }
 }
 
@@ -64,62 +46,43 @@ async function rpc(config, method, params, options = {}, timeoutMs = 30000) {
  * List all cron jobs.
  */
 export async function cronList(config, options = {}) {
-  return rpc(config, 'cron.list', {}, options);
+  return ocExec(resolveOC(config, options), 'cron list', 15000);
 }
 
 /**
  * Add a new cron job.
- *
- * @param {object} config
- * @param {object} params - {
- *   name, task (message text),
- *   schedule: { at?, every?, cron?, timezone? },
- *   agentId?, mode? ('main'|'isolated'),
- *   deliver? ('announce'|'webhook'|'none'),
- *   webhookUrl?, enabled?
- * }
  */
 export async function cronAdd(config, params, options = {}) {
-  return rpc(config, 'cron.add', {
-    name: params.name,
-    task: params.task,
-    schedule: params.schedule,
-    ...(params.agentId && { agentId: params.agentId }),
-    ...(params.mode && { mode: params.mode }),
-    ...(params.deliver && { deliver: params.deliver }),
-    ...(params.webhookUrl && { webhookUrl: params.webhookUrl }),
-    ...(params.enabled !== undefined && { enabled: params.enabled })
-  }, options);
-}
+  const oc = resolveOC(config, options);
+  const safeTask = params.task.replace(/'/g, "'\\''");
+  let scheduleArg = '';
+  if (params.schedule.cron) scheduleArg = `--cron '${params.schedule.cron}'`;
+  else if (params.schedule.every) scheduleArg = `--every ${params.schedule.every}`;
+  else if (params.schedule.at) scheduleArg = `--at '${params.schedule.at}'`;
 
-/**
- * Update an existing cron job.
- *
- * @param {object} config
- * @param {object} params - { jobId, ...fields to update }
- */
-export async function cronUpdate(config, params, options = {}) {
-  const { jobId, ...updates } = params;
-  return rpc(config, 'cron.update', { jobId, ...updates }, options);
+  const agentArg = params.agentId ? `--agent ${params.agentId}` : '';
+  const modeArg = params.mode ? `--mode ${params.mode}` : '';
+
+  return ocExec(oc, `cron add --name '${params.name}' --task '${safeTask}' ${scheduleArg} ${agentArg} ${modeArg}`, 15000);
 }
 
 /**
  * Remove a cron job.
  */
 export async function cronRemove(config, params, options = {}) {
-  return rpc(config, 'cron.remove', { jobId: params.jobId }, options);
+  return ocExec(resolveOC(config, options), `cron remove --id '${params.jobId}'`, 15000);
 }
 
 /**
  * Trigger immediate execution of a cron job.
  */
 export async function cronRun(config, params, options = {}) {
-  return rpc(config, 'cron.run', { jobId: params.jobId }, options);
+  return ocExec(resolveOC(config, options), `cron run --id '${params.jobId}'`, 60000);
 }
 
 /**
  * Get cron system status.
  */
 export async function cronStatus(config, options = {}) {
-  return rpc(config, 'cron.status', {}, options);
+  return ocExec(resolveOC(config, options), 'cron status', 15000);
 }

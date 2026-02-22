@@ -116,40 +116,78 @@ export function memoryDelete(config, key, options = {}) {
 }
 
 /**
- * Semantic memory search via OpenClaw gateway RPC.
- * Uses vector + BM25 hybrid search over indexed memory markdown.
+ * Semantic memory search via OpenClaw CLI.
+ * Uses `openclaw memory search` for vector + BM25 hybrid search.
  *
- * Requires the OpenClaw gateway to be running with memory indexing enabled.
+ * Falls back to simple grep-based search of memory files if CLI is unavailable.
  *
  * @param {object} config
  * @param {string} query - natural language search query
- * @param {object} options - { agent?, maxResults?, minScore?, host?, port?, token? }
+ * @param {object} options - { agent?, maxResults?, ssh?, home?, bin? }
  * @returns {object} { ok, results: [{ path, score, snippet, line }] }
  */
 export function memorySearch(config, query, options = {}) {
-  const host = options.host || config?.openclaw?.host || '127.0.0.1';
-  const port = options.port || config?.openclaw?.port || 18791;
-  const token = options.token || config?.openclaw?.token || '';
+  const ssh = options.ssh || config?.openclaw?.ssh || 'family@localhost';
+  const home = options.home || config?.openclaw?.home || '/Users/family/openclaw';
+  const bin = options.bin || config?.openclaw?.bin || '/opt/homebrew/bin/openclaw';
 
-  const params = {
-    query,
-    ...(options.maxResults && { maxResults: options.maxResults }),
-    ...(options.minScore && { minScore: options.minScore })
-  };
+  const safeQuery = query.replace(/'/g, "'\\''");
+  const maxResults = options.maxResults || 10;
+  const envPrefix = `export PATH=/opt/homebrew/bin:$PATH && export OPENCLAW_HOME=${home}`;
+  const ocCmd = `${bin} memory search '${safeQuery}' --limit ${maxResults} --json 2>/dev/null`;
 
-  const body = JSON.stringify({ method: 'memory.search', params });
-  const headers = ['Content-Type: application/json'];
-  if (token) headers.push(`Authorization: Bearer ${token}`);
-
-  const headerArgs = headers.map(h => `-H "${h}"`).join(' ');
-  const bodyArg = `-d '${body.replace(/'/g, "'\\''")}'`;
-  const url = `http://${host}:${port}/rpc`;
-  const cmd = `curl -sS -X POST ${headerArgs} ${bodyArg} "${url}"`;
+  const cmd = ssh
+    ? `ssh ${ssh} '${envPrefix} && ${ocCmd}'`
+    : `${envPrefix} && ${ocCmd}`;
 
   try {
-    const result = execSync(cmd, { encoding: 'utf8', timeout: 15000 });
+    const result = execSync(cmd, { encoding: 'utf8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] });
     const data = JSON.parse(result);
     return { ok: true, results: data.results || data };
+  } catch {
+    // Fallback: simple grep over memory files
+    return memorySearchFallback(config, query, options);
+  }
+}
+
+function memorySearchFallback(config, query, options) {
+  const memDir = resolveMemoryDir(config, options);
+  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+
+  try {
+    const files = readdirSync(memDir).filter(f => f.endsWith('.md'));
+    const results = [];
+
+    for (const f of files) {
+      const content = readFileSync(join(memDir, f), 'utf8');
+      const lines = content.split('\n');
+      let score = 0;
+
+      for (const term of terms) {
+        const count = (content.toLowerCase().match(new RegExp(term, 'g')) || []).length;
+        score += count;
+      }
+
+      if (score > 0) {
+        // Find best matching line
+        let bestLine = 0;
+        let bestScore = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const lineScore = terms.reduce((s, t) => s + (lines[i].toLowerCase().includes(t) ? 1 : 0), 0);
+          if (lineScore > bestScore) { bestScore = lineScore; bestLine = i + 1; }
+        }
+
+        results.push({
+          path: join(memDir, f),
+          score: score / (terms.length * 10),
+          snippet: lines[bestLine - 1]?.slice(0, 200) || '',
+          line: bestLine
+        });
+      }
+    }
+
+    results.sort((a, b) => b.score - a.score);
+    return { ok: true, results: results.slice(0, options.maxResults || 10), fallback: true };
   } catch (e) {
     return { ok: false, error: e.message, results: [] };
   }
