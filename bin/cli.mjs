@@ -7,6 +7,7 @@ import { startWebhookServer } from '../src/webhook-server.mjs';
 import { emitJson } from '../src/emit.mjs';
 import { watchQueue } from '../src/watch.mjs';
 import { startRoomPoller } from '../src/room-poller.mjs';
+import { memoryList, memoryGet, memorySet, memoryAppend, memoryDelete } from '../src/memory.mjs';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -35,6 +36,21 @@ Usage:
   ide-agent-kit poll --rooms <room1,room2> --api-key <key> --handle <@handle> [--interval <sec>] [--config <path>]
     Poll Ant Farm rooms directly and nudge IDE tmux session on new messages.
     No webhooks required — works anywhere with curl and tmux.
+
+  ide-agent-kit memory list [--config <path>]
+    List all memory entries.
+
+  ide-agent-kit memory get --key <topic> [--config <path>]
+    Read a memory entry.
+
+  ide-agent-kit memory set --key <topic> --value <text> [--config <path>]
+    Write a memory entry (overwrites existing).
+
+  ide-agent-kit memory append --key <topic> --value <text> [--config <path>]
+    Append to a memory entry with timestamp.
+
+  ide-agent-kit memory delete --key <topic> [--config <path>]
+    Delete a memory entry.
 
   ide-agent-kit init [--ide <claude-code|codex|cursor|vscode|gemini>]
     Generate starter config for your IDE.
@@ -153,6 +169,48 @@ async function main() {
       config
     });
     return;
+  }
+
+  if (command === 'memory') {
+    const opts = parseKV(args, subcommand || 'memory');
+    const config = loadConfig(opts.config);
+
+    if (subcommand === 'list') {
+      const entries = memoryList(config);
+      if (entries.length === 0) {
+        console.log('No memory entries. Use "ide-agent-kit memory set --key <topic> --value <text>" to create one.');
+      } else {
+        entries.forEach(e => console.log(`  ${e.key} (${e.size} bytes)`));
+      }
+      return;
+    }
+    if (subcommand === 'get') {
+      if (!opts.key) { console.error('Error: --key is required'); process.exit(1); }
+      const result = memoryGet(config, opts.key);
+      if (result.error) { console.error(`Not found: ${opts.key}`); process.exit(1); }
+      console.log(result.content);
+      return;
+    }
+    if (subcommand === 'set') {
+      if (!opts.key || !opts.value) { console.error('Error: --key and --value are required'); process.exit(1); }
+      const result = memorySet(config, opts.key, opts.value);
+      console.log(`Set ${result.key} (${result.size} bytes) → ${result.path}`);
+      return;
+    }
+    if (subcommand === 'append') {
+      if (!opts.key || !opts.value) { console.error('Error: --key and --value are required'); process.exit(1); }
+      const result = memoryAppend(config, opts.key, opts.value);
+      console.log(`Appended to ${result.key} (${result.size} bytes) → ${result.path}`);
+      return;
+    }
+    if (subcommand === 'delete') {
+      if (!opts.key) { console.error('Error: --key is required'); process.exit(1); }
+      const result = memoryDelete(config, opts.key);
+      console.log(`${result.action}: ${result.key}`);
+      return;
+    }
+    console.error('Usage: ide-agent-kit memory <list|get|set|append|delete> [options]');
+    process.exit(1);
   }
 
   if (command === 'init') {
