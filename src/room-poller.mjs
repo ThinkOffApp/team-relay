@@ -138,10 +138,18 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
   // Start interval
   const timer = setInterval(poll, pollInterval * 1000);
 
+  // Anti-sleep heartbeat (keeps terminal pseudo-active to prevent display-sleep freeze)
+  const heartbeat = setInterval(() => {
+    try {
+      execSync(`tmux send-keys -t ${JSON.stringify(session)} Escape`);
+    } catch { }
+  }, 4 * 60 * 1000);
+
   // Handle shutdown
   process.on('SIGINT', () => {
     console.log('\nPoller stopped.');
     clearInterval(timer);
+    clearInterval(heartbeat);
     process.exit(0);
   });
   process.on('SIGTERM', () => {
