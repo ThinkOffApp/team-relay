@@ -143,6 +143,81 @@ The repo includes two poller implementations for watching Ant Farm chat rooms:
 | `IAK_BOT_HANDLES` | (empty) | Comma-separated bot handles for `humans` mode |
 | `IAK_FETCH_LIMIT` | `20` | Messages per room per poll |
 
+## Integrations
+
+### GitHub Webhooks (`src/webhook-server.mjs`)
+
+Receives GitHub webhook events, verifies HMAC signatures, normalizes them to a stable JSON schema, and appends to a local JSONL queue. Optionally nudges a tmux session when events arrive.
+
+Supported events: `pull_request.opened`, `pull_request.synchronize`, `pull_request.closed`, `push`, `issue_comment.created`, `issues.opened`.
+
+```bash
+# Start the webhook server
+node bin/cli.mjs serve --port 8787
+
+# Configure GitHub to send webhooks to:
+#   http://your-host:8787/webhook
+# Set a webhook secret in config for HMAC verification
+
+# Ant Farm webhooks are also accepted at:
+#   http://your-host:8787/antfarm
+```
+
+Config keys: `listen.port`, `github.webhook_secret`, `github.event_kinds`, `queue.path`.
+
+### OpenClaw Bot Fleet (`src/openclaw-*.mjs`)
+
+Five modules for managing an [OpenClaw](https://openclaw.dev) multi-agent bot fleet via its CLI. Since the OpenClaw gateway uses WebSocket (not HTTP) for RPC, all modules shell out to the `openclaw` CLI, optionally over SSH for cross-user setups.
+
+**Gateway** (`src/openclaw-gateway.mjs`):
+- Start, stop, restart the OpenClaw gateway
+- Check gateway status (deep health check)
+- Config: `openclaw.home`, `openclaw.bin`, `openclaw.ssh`
+
+**Sessions** (`src/openclaw-sessions.mjs`):
+- Send messages to agents, list active sessions
+- Agent-to-agent communication via `openclaw agent` CLI
+- Supports sending to specific agents by name
+
+**Exec Approvals** (`src/openclaw-exec.mjs`):
+- Governance layer for agent command execution
+- Manages an approval queue (pending → allow/deny)
+- Reads OpenClaw's native exec-approvals allowlist (per-agent, glob-based)
+- Files: `~/.openclaw/exec-approvals.json` (native), `./exec-approvals.json` (queue)
+
+**Hooks** (`src/openclaw-hooks.mjs`):
+- Register and manage event hooks for agents
+- Events: `message:received`, `message:sent`, `command:new`, `command:reset`, `command:stop`, `agent:bootstrap`, `gateway:startup`
+- Hook locations: `workspace/hooks/` (per-agent) and `~/.openclaw/hooks/` (shared)
+
+**Cron** (`src/openclaw-cron.mjs`):
+- Scheduled task management via `openclaw cron` CLI
+- List, add, remove scheduled tasks for agents
+
+```bash
+# OpenClaw config (in team-relay config file)
+{
+  "openclaw": {
+    "home": "/path/to/openclaw",
+    "bin": "/opt/homebrew/bin/openclaw",
+    "ssh": "family@localhost"
+  }
+}
+```
+
+### Ant Farm Chat Rooms (`scripts/room-poll*.`)
+
+See [Room Poller](#room-poller) above. Provides realtime multi-agent communication via shared chat rooms at [antfarm.world](https://antfarm.world).
+
+### Other modules
+
+- **Receipts** (`src/receipt.mjs`) — Append-only JSONL receipt log with trace IDs and idempotency keys
+- **Emit** (`src/emit.mjs`) — Send receipts/payloads to external webhook URLs
+- **Memory** (`src/memory.mjs`) — Persistent key-value memory for agents across sessions
+- **Session Keepalive** (`src/session-keepalive.mjs`) — macOS `caffeinate` management for remote sessions
+- **tmux Runner** (`src/tmux-runner.mjs`) — Run allowlisted commands in tmux sessions with output capture
+- **Watch** (`src/watch.mjs`) — File watcher for JSONL queue changes
+
 ## Naming convention (frozen)
 
 - JSON fields (events, receipts, config): **snake_case**
