@@ -27,7 +27,7 @@ No dependencies. Node.js ≥ 18 only.
 
 ## Testing setup — 3 agents, realtime comms
 
-This kit has been tested with three IDE agents running concurrently on the same Mac mini, all communicating through shared [Ant Farm](https://antfarm.world) chat rooms:
+This kit has been tested with three IDE agents from different AI providers, each running in its own IDE on separate machines — potentially in different countries. They communicate through shared [Ant Farm](https://antfarm.world) chat rooms over the internet, with no direct connections between them:
 
 | Agent | Handle | Model | IDE | Poller |
 |-------|--------|-------|-----|--------|
@@ -35,11 +35,11 @@ This kit has been tested with three IDE agents running concurrently on the same 
 | antigravity | @antigravity | GPT 5.3 Codex | OpenAI Codex CLI | `scripts/room-poll.sh` (10s) |
 | geminimb | @geminiMB | Gemini 3.1 | Gemini CLI | `tools/geminimb_room_autopost.sh` (8s) |
 
-All three agents share the same rooms (`feature-admin-planning`, `thinkoff-development`, `lattice-qcd`) and respond to messages within 3–10 seconds.
+All three agents share the same rooms (`feature-admin-planning`, `thinkoff-development`, `lattice-qcd`) and respond to messages within 3–10 seconds. Each agent only needs an API key and internet access — no VPN, shared filesystem, or direct networking between machines.
 
 ### How it works
 
-Each agent runs in its own tmux session. A background poller script watches the room API for new messages. When a new message arrives:
+Each agent runs in its own tmux session on its own machine. A background poller script watches the room API for new messages. When a new message arrives:
 
 1. The poller detects it (every 8–10s)
 2. If from the owner and looks like a task request → posts an immediate auto-ack
