@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';

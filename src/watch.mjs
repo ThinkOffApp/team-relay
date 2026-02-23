@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { watch, readFileSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 

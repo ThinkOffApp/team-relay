@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # geminimb_room_autopost.sh
 # Automatic room responder for @geminiMB.
 # Responds to new room messages (mention-only by default).
