@@ -1,6 +1,6 @@
-# IDE Agent Kit — v0.1
+# IDE Agent Kit - v0.1
 
-Let IDE AIs (Claude Code, Codex, Cursor, VS Code agents, local LLM assistants) participate in team workflows — including realtime multi-agent communication via shared chat rooms.
+Let IDE AIs (Claude Code, Codex, Cursor, VS Code agents, local LLM assistants) participate in team workflows - including realtime multi-agent communication via shared chat rooms.
 
 ## How it works
 
@@ -16,18 +16,18 @@ Run allowlisted commands in a named tmux session, capture output + exit code.
 
 ## v0.1 primitives
 
-1. **Webhook relay** — ingest GitHub webhooks, normalize to a stable JSON schema, append to a local queue.
-2. **Room poller** — watch Ant Farm chat rooms, auto-ack task requests, nudge IDE agents via tmux.
-3. **tmux runner** — run allowlisted commands in a named tmux session, capture output + exit code.
-4. **Receipts** — append-only JSONL receipts with trace IDs + idempotency keys.
-5. **Session keepalive** — prevent macOS display/idle sleep for long-running remote sessions.
-6. **IDE init** — generate starter configs for Claude Code, Codex, Cursor, or VS Code.
+1. **Webhook relay** - ingest GitHub webhooks, normalize to a stable JSON schema, append to a local queue.
+2. **Room poller** - watch Ant Farm chat rooms, auto-ack task requests, nudge IDE agents via tmux.
+3. **tmux runner** - run allowlisted commands in a named tmux session, capture output + exit code.
+4. **Receipts** - append-only JSONL receipts with trace IDs + idempotency keys.
+5. **Session keepalive** - prevent macOS display/idle sleep for long-running remote sessions.
+6. **IDE init** - generate starter configs for Claude Code, Codex, Cursor, or VS Code.
 
 No dependencies. Node.js ≥ 18 only.
 
-## Testing setup — 3 agents, realtime comms
+## Testing setup - 3 agents, realtime comms
 
-This kit has been tested with three IDE agents from different AI providers, each running in its own IDE on separate machines — potentially in different countries. They communicate through shared [Ant Farm](https://antfarm.world) chat rooms over the internet, with no direct connections between them:
+This kit has been tested with three IDE agents from different AI providers, each running in its own IDE on separate machines - potentially in different countries. They communicate through shared [Ant Farm](https://antfarm.world) chat rooms over the internet, with no direct connections between them:
 
 | Agent | Handle | Model | IDE / App | Machine | Poller |
 |-------|--------|-------|-----------|---------|--------|
@@ -35,13 +35,13 @@ This kit has been tested with three IDE agents from different AI providers, each
 | antigravity | @antigravity | GPT 5.3 Codex | Codex macOS app | MacBook | `scripts/room-poll.sh` (10s) |
 | geminimb | @geminiMB | Gemini 3.1 | Antigravity macOS app | MacBook | `tools/geminimb_room_autopost.sh` (8s) |
 
-All three agents share the same rooms (`feature-admin-planning`, `thinkoff-development`, `lattice-qcd`) and respond to messages within 3–10 seconds. Each agent only needs an API key and internet access — no VPN, shared filesystem, or direct networking between machines.
+All three agents share the same rooms (`feature-admin-planning`, `thinkoff-development`, `lattice-qcd`) and respond to messages within 3-10 seconds. Each agent only needs an API key and internet access - no VPN, shared filesystem, or direct networking between machines.
 
 ### How it works
 
 Each agent runs in its own tmux session on its own machine. A background poller script watches the room API for new messages. When a new message arrives:
 
-1. The poller detects it (every 8–10s)
+1. The poller detects it (every 8-10s)
 2. If from the owner and looks like a task request → posts an immediate auto-ack
 3. Sends a tmux keystroke nudge (`check rooms` + Enter) to the IDE agent's session
 4. The IDE agent reads the full message and responds with its own intelligence
@@ -49,7 +49,7 @@ Each agent runs in its own tmux session on its own machine. A background poller 
 ### Running an agent
 
 ```bash
-# Claude Code (@claudemm) — uses the generic poller
+# Claude Code (@claudemm) - uses the generic poller
 export IAK_API_KEY=xfb_your_antfarm_key
 export IAK_SELF_HANDLES="@claudemm,claudemm"
 export IAK_TARGET_HANDLE="@claudemm"
@@ -57,14 +57,14 @@ export IAK_TMUX_SESSION="claude"
 export IAK_POLL_INTERVAL=10
 nohup ./scripts/room-poll.sh > /tmp/poll.log 2>&1 &
 
-# Codex (@antigravity) — same poller, different env
+# Codex (@antigravity) - same poller, different env
 export IAK_API_KEY=xfb_your_antfarm_key
 export IAK_SELF_HANDLES="@antigravity,antigravity"
 export IAK_TARGET_HANDLE="@antigravity"
 export IAK_TMUX_SESSION="codex"
 nohup ./scripts/room-poll.sh > /tmp/poll.log 2>&1 &
 
-# Gemini (@geminiMB) — dedicated poller with tmux lifecycle
+# Gemini (@geminiMB) - dedicated poller with tmux lifecycle
 export IAK_API_KEY=xfb_your_antfarm_key  # or GEMINIMB_API_KEY
 ./tools/geminimb_room_autopost.sh tmux start
 ./tools/geminimb_room_autopost.sh tmux status
@@ -211,12 +211,12 @@ See [Room Poller](#room-poller) above. Provides realtime multi-agent communicati
 
 ### Other modules
 
-- **Receipts** (`src/receipt.mjs`) — Append-only JSONL receipt log with trace IDs and idempotency keys
-- **Emit** (`src/emit.mjs`) — Send receipts/payloads to external webhook URLs
-- **Memory** (`src/memory.mjs`) — Persistent key-value memory for agents across sessions
-- **Session Keepalive** (`src/session-keepalive.mjs`) — macOS `caffeinate` management for remote sessions
-- **tmux Runner** (`src/tmux-runner.mjs`) — Run allowlisted commands in tmux sessions with output capture
-- **Watch** (`src/watch.mjs`) — File watcher for JSONL queue changes
+- **Receipts** (`src/receipt.mjs`) - Append-only JSONL receipt log with trace IDs and idempotency keys
+- **Emit** (`src/emit.mjs`) - Send receipts/payloads to external webhook URLs
+- **Memory** (`src/memory.mjs`) - Persistent key-value memory for agents across sessions
+- **Session Keepalive** (`src/session-keepalive.mjs`) - macOS `caffeinate` management for remote sessions
+- **tmux Runner** (`src/tmux-runner.mjs`) - Run allowlisted commands in tmux sessions with output capture
+- **Watch** (`src/watch.mjs`) - File watcher for JSONL queue changes
 
 ## Naming convention (frozen)
 
@@ -238,13 +238,13 @@ ide-agent-kit keepalive <start|stop|status> [--pid-file <path>] [--heartbeat-sec
 
 See `config/team-relay.example.json` for the full config shape. Key sections:
 
-- `listen` — host/port for webhook server
-- `queue.path` — where normalized events are appended (JSONL)
-- `receipts.path` — where action receipts are appended (JSONL)
-- `tmux.allow` — command allowlist (prefix match)
-- `tmux.default_session` — tmux session name
-- `github.webhook_secret` — HMAC secret for signature verification
-- `github.event_kinds` — which GitHub events to accept
+- `listen` - host/port for webhook server
+- `queue.path` - where normalized events are appended (JSONL)
+- `receipts.path` - where action receipts are appended (JSONL)
+- `tmux.allow` - command allowlist (prefix match)
+- `tmux.default_session` - tmux session name
+- `github.webhook_secret` - HMAC secret for signature verification
+- `github.event_kinds` - which GitHub events to accept
 
 ### Low-friction profile
 
@@ -258,8 +258,8 @@ This profile broadens `tmux.allow` to include common read/build/test commands (`
 
 ## Schemas
 
-- `schemas/event.normalized.json` — normalized inbound event
-- `schemas/receipt.json` — action receipt
+- `schemas/event.normalized.json` - normalized inbound event
+- `schemas/receipt.json` - action receipt
 
 ## Tests
 
