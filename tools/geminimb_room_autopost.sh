@@ -21,7 +21,8 @@ API_KEY="REDACTED_GEMINIMB_KEY"
 BASE_URL="https://antfarm.world/api/v1"
 ROOMS_CSV="${ROOMS:-feature-admin-planning,thinkoff-development}"
 POLL_INTERVAL="${POLL_INTERVAL:-8}"
-FETCH_LIMIT="${FETCH_LIMIT:-10}"
+FETCH_LIMIT="${FETCH_LIMIT:-30}"
+PRIME_ON_START="${PRIME_ON_START:-0}"
 SESSION="${SESSION:-geminimb-room-autopost}"
 AGENT_HANDLE="@geminiMB"
 MENTION_ONLY="${MENTION_ONLY:-0}"   # 0 = process all messages in the room
@@ -101,7 +102,7 @@ build_reply() {
   fi
 
   if [[ "$is_task" == "1" && "$targets_me" == "1" ]]; then
-    echo "@${from_handle#@} ${SOURCE_TAG} starting now. I will report back with results."
+    echo "@${from_handle#@} ${SOURCE_TAG} starting now (poller ack)."
     return 0
   fi
 
@@ -232,11 +233,13 @@ fi
 
 touch "$SEEN_IDS_FILE" "$ACKED_IDS_FILE"
 IFS=',' read -r -a ROOMS_ARRAY <<< "$ROOMS_CSV"
-for raw_room in "${ROOMS_ARRAY[@]}"; do
-  room="$(echo "$raw_room" | xargs)"
-  [[ -z "$room" ]] && continue
-  prime_seen_ids "$room"
-done
+if [[ "$PRIME_ON_START" == "1" ]]; then
+  for raw_room in "${ROOMS_ARRAY[@]}"; do
+    room="$(echo "$raw_room" | xargs)"
+    [[ -z "$room" ]] && continue
+    prime_seen_ids "$room"
+  done
+fi
 
 echo "[geminimb-autopost] rooms=$ROOMS_CSV poll=${POLL_INTERVAL}s limit=${FETCH_LIMIT} mention_only=$MENTION_ONLY"
 echo "[geminimb-autopost] seen=$SEEN_IDS_FILE acked=$ACKED_IDS_FILE"
