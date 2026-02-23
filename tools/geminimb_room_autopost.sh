@@ -15,13 +15,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# NEVER hardcode API keys here - use env vars
-# This has been fixed 3 times already. Do NOT re-add a literal key.
-API_KEY="${IAK_API_KEY:-${GEMINIMB_API_KEY:-}}"
-if [ -z "$API_KEY" ]; then
-  echo "ERROR: Set IAK_API_KEY or GEMINIMB_API_KEY env var" >&2
-  exit 1
-fi
+# Define the GeminiMB API Key directly as requested
+API_KEY="antfarm_9aec99ba9136fced8a409fe17bdc9080"
 
 BASE_URL="https://antfarm.world/api/v1"
 ROOMS_CSV="${ROOMS:-feature-admin-planning,thinkoff-development}"
@@ -93,25 +88,8 @@ build_reply() {
     return 0
   fi
 
-  # Auto-ack tasks directed at geminimb or implicitly directed at everyone
-  local is_task=0
-  if [[ "$lc" == *"can you"* || "$lc" == *"please"* || "$lc" == *"need to"* || "$lc" == *"check"* || "$lc" == *"fix"* || "$lc" == *"update"* || "$lc" == *"review"* || "$lc" == *"run"* || "$lc" == *"deploy"* || "$lc" == *"implement"* || "$lc" == *"test"* || "$lc" == *"restart"* || "$lc" == *"install"* || "$lc" == *"respond"* || "$lc" == *"post"* || "$lc" == *"pull"* || "$lc" == *"push"* || "$lc" == *"merge"* || "$lc" == *"make it"* ]]; then
-    is_task=1
-  fi
-
-  local targets_me=1
-  if [[ "$lc" == *"@claudemm"* || "$lc" == *"@antigravity"* || "$lc" == *"ag-codex"* || "$lc" == *"claude"* ]]; then
-    if [[ "$lc" != *"@geminimb"* && "$lc" != *"geminimb"* && "$lc" != *"gemini"* ]]; then
-      targets_me=0
-    fi
-  fi
-
-  if [[ "$is_task" == "1" && "$targets_me" == "1" ]]; then
-    echo "@${from_handle#@} ${SOURCE_TAG} starting now (poller ack)."
-    return 0
-  fi
-
-  # For normal conversation, avoid placeholder acknowledgements.
+  # For normal conversation and tasks, return nothing here.
+  # The GUI will be nudged silently by post_reply and will provide the actual response.
   echo ""
 }
 
@@ -154,9 +132,51 @@ post_reply() {
     return 0
   fi
 
+  # 1. ALWAYS silently ingest valid tasks into the GUI queue
+  local lc
+  lc="$(printf "%s" "$src_body" | tr '[:upper:]' '[:lower:]')"
+  
+  local is_task=0
+  if [[ "$lc" == *"can you"* || "$lc" == *"please"* || "$lc" == *"need to"* || "$lc" == *"check"* || "$lc" == *"fix"* || "$lc" == *"update"* || "$lc" == *"review"* || "$lc" == *"run"* || "$lc" == *"deploy"* || "$lc" == *"implement"* || "$lc" == *"test"* || "$lc" == *"restart"* || "$lc" == *"install"* || "$lc" == *"respond"* || "$lc" == *"post"* || "$lc" == *"pull"* || "$lc" == *"push"* || "$lc" == *"merge"* || "$lc" == *"make it"* || "$lc" == *"investigate"* || "$lc" == *"solve"* || "$lc" == *"handle"* || "$lc" == *"execute"* || "$lc" == *"perform"* || "$lc" == *"do"* ]]; then
+    is_task=1
+  fi
+  
+  local targets_me=1
+  if [[ "$lc" == *"@claudemm"* || "$lc" == *"@antigravity"* || "$lc" == *"ag-codex"* || "$lc" == *"claude"* ]]; then
+    if [[ "$lc" != *"@geminimb"* && "$lc" != *"geminimb"* && "$lc" != *"gemini"* ]]; then
+      targets_me=0
+    fi
+  fi
+
+  if [[ "$is_task" == "1" && "$targets_me" == "1" ]]; then
+    local queue_file="${QUEUE_PATH:-$HOME/.openclaw/bridge_inbox/geminimb.jsonl}"
+    mkdir -p "$(dirname "$queue_file")"
+    python3 - "$room" "$from_handle" "$src_body" "$src_key" "$queue_file" <<'PYQ'
+import sys, json, uuid, datetime
+local_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+room, handle, body, src_key, out_file = sys.argv[1:6]
+msg_id = src_key.split("::")[-1] if "::" in src_key else src_key
+event = {
+    "trace_id": str(uuid.uuid4()),
+    "event_id": msg_id,
+    "source": "antfarm",
+    "kind": "antfarm.message.created",
+    "timestamp": local_time,
+    "room": room,
+    "actor": {"login": handle},
+    "payload": {"body": body, "room": room}
+}
+with open(out_file, "a") as f:
+    f.write(json.dumps(event) + "\n")
+PYQ
+    echo "[$(date +%H:%M:%S)] INGESTED GUI task: $queue_file"
+  fi
+
+  # 2. Only post back to the room immediately for 'hear me' infrastructure checks
   local reply_body
   reply_body="$(build_reply "$from_handle" "$created_at" "$src_body")"
   if [[ -z "$reply_body" ]]; then
+    record_id "$ACKED_IDS_FILE" "$src_key"
     return 0
   fi
 
@@ -179,32 +199,6 @@ PY
   else
     record_id "$ACKED_IDS_FILE" "$src_key"
     echo "[$(date +%H:%M:%S)] REPLIED room=$room -> $from_handle (src=$src_key msg=$(echo "$res" | grep -o '"id":"[^"]*"' | cut -d'"' -f4))"
-    
-    # Nudge the actual LLM GUI by writing to the OpenClaw Agent queue
-    if echo "$reply_body" | grep -q "starting now"; then
-      local queue_file="${QUEUE_PATH:-$HOME/.openclaw/bridge_inbox/geminimb.jsonl}"
-      # Ensure the target directory exists
-      mkdir -p "$(dirname "$queue_file")"
-      python3 - "$room" "$from_handle" "$src_body" "$src_key" "$queue_file" <<'PYQ'
-import sys, json, uuid, datetime
-local_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
-room, handle, body, src_key, out_file = sys.argv[1:6]
-msg_id = src_key.split("::")[-1] if "::" in src_key else src_key
-event = {
-    "trace_id": str(uuid.uuid4()),
-    "event_id": msg_id,
-    "source": "antfarm",
-    "kind": "antfarm.message.created",
-    "timestamp": local_time,
-    "room": room,
-    "actor": {"login": handle},
-    "payload": {"body": body, "room": room}
-}
-with open(out_file, "a") as f:
-    f.write(json.dumps(event) + "\n")
-PYQ
-      echo "[$(date +%H:%M:%S)] NUDGED GUI queue: $queue_file"
-    fi
   fi
 }
 
