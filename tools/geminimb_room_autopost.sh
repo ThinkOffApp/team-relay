@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-
-# SPDX-License-Identifier: AGPL-3.0-only
-
 # geminimb_room_autopost.sh
 # Automatic room responder for @geminiMB.
 # Responds to new room messages (mention-only by default).
@@ -135,49 +132,56 @@ post_reply() {
     return 0
   fi
 
-  # 1. ALWAYS silently ingest valid tasks into the GUI queue
-  local lc
-  lc="$(printf "%s" "$src_body" | tr '[:upper:]' '[:lower:]')"
-  
-  local is_task=0
-  if [[ "$lc" == *"can you"* || "$lc" == *"please"* || "$lc" == *"need to"* || "$lc" == *"check"* || "$lc" == *"fix"* || "$lc" == *"update"* || "$lc" == *"review"* || "$lc" == *"run"* || "$lc" == *"deploy"* || "$lc" == *"implement"* || "$lc" == *"test"* || "$lc" == *"restart"* || "$lc" == *"install"* || "$lc" == *"respond"* || "$lc" == *"post"* || "$lc" == *"pull"* || "$lc" == *"push"* || "$lc" == *"merge"* || "$lc" == *"make it"* || "$lc" == *"investigate"* || "$lc" == *"solve"* || "$lc" == *"handle"* || "$lc" == *"execute"* || "$lc" == *"perform"* || "$lc" == *"do"* ]]; then
-    is_task=1
-  fi
-  
-  local targets_me=1
-  if [[ "$lc" == *"@claudemm"* || "$lc" == *"@antigravity"* || "$lc" == *"ag-codex"* || "$lc" == *"claude"* ]]; then
-    if [[ "$lc" != *"@geminimb"* && "$lc" != *"geminimb"* && "$lc" != *"gemini"* ]]; then
-      targets_me=0
+  local reply_body
+  reply_body="$(build_reply "$from_handle" "$created_at" "$src_body")"
+
+  # 1. ALWAYS silently generate an LLM reply for valid tasks if there was no canned reply
+  if [[ -z "$reply_body" ]]; then
+    local lc
+    lc="$(printf "%s" "$src_body" | tr '[:upper:]' '[:lower:]')"
+    
+    local is_task=0
+    if [[ "$lc" == *"can you"* || "$lc" == *"please"* || "$lc" == *"need to"* || "$lc" == *"check"* || "$lc" == *"fix"* || "$lc" == *"update"* || "$lc" == *"review"* || "$lc" == *"run"* || "$lc" == *"deploy"* || "$lc" == *"implement"* || "$lc" == *"test"* || "$lc" == *"restart"* || "$lc" == *"install"* || "$lc" == *"respond"* || "$lc" == *"post"* || "$lc" == *"pull"* || "$lc" == *"push"* || "$lc" == *"merge"* || "$lc" == *"make it"* || "$lc" == *"investigate"* || "$lc" == *"solve"* || "$lc" == *"handle"* || "$lc" == *"execute"* || "$lc" == *"perform"* || "$lc" == *"do"* ]]; then
+      is_task=1
+    fi
+    
+    local targets_me=1
+    if [[ "$lc" == *"@claudemm"* || "$lc" == *"@antigravity"* || "$lc" == *"ag-codex"* || "$lc" == *"claude"* ]]; then
+      if [[ "$lc" != *"@geminimb"* && "$lc" != *"geminimb"* && "$lc" != *"gemini"* ]]; then
+        targets_me=0
+      fi
+    fi
+
+    if [[ "$is_task" == "1" && "$targets_me" == "1" ]]; then
+      local prompt_file="/tmp/geminimb_prompt.txt"
+      cat > "$prompt_file" <<EOF
+You are @geminiMB in a multi-agent engineering room.
+Write one concise, concrete reply to the latest message.
+If no reply is needed, output exactly: NO_REPLY
+
+Rules:
+- Be specific and actionable.
+- Do not claim work is done unless explicitly stated in message.
+- Keep response under 110 words.
+
+Room: $room
+From: $from_handle
+Message:
+$src_body
+EOF
+      echo "[$(date +%H:%M:%S)] GENERATING LLM reply for task from $from_handle..."
+      local llm_out
+      if llm_out="$(source ~/.zprofile && /opt/homebrew/bin/gemini -y -p "\$(cat "$prompt_file")" -o text 2>/dev/null)"; then
+        if [[ -n "$llm_out" && "$llm_out" != "NO_REPLY" ]]; then
+          reply_body="@${from_handle#@} [geminimb] ${llm_out:0:1000}"
+          echo "[$(date +%H:%M:%S)] GENERATED reply: ${#reply_body} chars"
+        fi
+      else
+        echo "[$(date +%H:%M:%S)] Error generating LLM reply: $?"
+      fi
     fi
   fi
 
-  if [[ "$is_task" == "1" && "$targets_me" == "1" ]]; then
-    local queue_file="${QUEUE_PATH:-$HOME/.openclaw/bridge_inbox/geminimb.jsonl}"
-    mkdir -p "$(dirname "$queue_file")"
-    python3 - "$room" "$from_handle" "$src_body" "$src_key" "$queue_file" <<'PYQ'
-import sys, json, uuid, datetime
-local_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
-room, handle, body, src_key, out_file = sys.argv[1:6]
-msg_id = src_key.split("::")[-1] if "::" in src_key else src_key
-event = {
-    "trace_id": str(uuid.uuid4()),
-    "event_id": msg_id,
-    "source": "antfarm",
-    "kind": "antfarm.message.created",
-    "timestamp": local_time,
-    "room": room,
-    "actor": {"login": handle},
-    "payload": {"body": body, "room": room}
-}
-with open(out_file, "a") as f:
-    f.write(json.dumps(event) + "\n")
-PYQ
-    echo "[$(date +%H:%M:%S)] INGESTED GUI task: $queue_file"
-  fi
-
-  # 2. Only post back to the room immediately for 'hear me' infrastructure checks
-  local reply_body
-  reply_body="$(build_reply "$from_handle" "$created_at" "$src_body")"
   if [[ -z "$reply_body" ]]; then
     record_id "$ACKED_IDS_FILE" "$src_key"
     return 0
