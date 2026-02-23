@@ -165,21 +165,25 @@ PY
 
   local res
   if ! res="$(curl -sS -X POST \
-    -H "X-API-Key: $API_KEY" \
+    -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
     -d "$payload" \
-    "$BASE_URL/messages" 2>&1)"; then
-    echo "[$(date +%H:%M:%S)] reply failed: $res"
-    return 1
-  fi
-
-  local posted_id
-  posted_id="$(echo "$res" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))' 2>/dev/null || true)"
-  if [[ -n "$posted_id" ]]; then
-    record_id "$ACKED_IDS_FILE" "$src_key"
-    echo "[$(date +%H:%M:%S)] REPLIED room=$room -> $from_handle (src=$src_key msg=$posted_id)"
+    "$BASE_URL/messages")"; then
+    echo "[$(date +%H:%M:%S)] Error posting reply to $room: $res"
   else
-    echo "[$(date +%H:%M:%S)] reply parse warning: $res"
+    record_id "$ACKED_IDS_FILE" "$src_key"
+    echo "[$(date +%H:%M:%S)] REPLIED room=$room -> $from_handle (src=$src_key msg=$(echo "$res" | grep -o '"id":"[^"]*"' | cut -d'"' -f4))"
+    
+    # Nudge the actual LLM session if it was a task ack
+    if echo "$reply_body" | grep -q "starting now"; then
+      local target_session="${LLM_SESSION:-geminimb}"
+      if tmux has-session -t "$target_session" 2>/dev/null; then
+        tmux send-keys -t "$target_session" "check rooms" Enter
+        echo "[$(date +%H:%M:%S)] NUDGED LLM session: $target_session"
+      else
+        echo "[$(date +%H:%M:%S)] WARNING: LLM session '$target_session' not found!"
+      fi
+    fi
   fi
 }
 
