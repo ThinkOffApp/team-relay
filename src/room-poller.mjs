@@ -133,7 +133,7 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
     });
     try {
       execSync(
-        `curl -sS -X POST "${BASE_URL}/messages" -H "X-API-Key: ${apiKey}" -H "Content-Type: application/json" -d '${payload.replace(/'/g, "'\\''")}'`,
+        `curl -sS -X POST "https://antfarm.world/api/v1/messages" -H "X-API-Key: ${apiKey}" -H "Content-Type: application/json" -d '${payload.replace(/'/g, "'\\''")}'`,
         { timeout: 15000 }
       );
     } catch (e) {

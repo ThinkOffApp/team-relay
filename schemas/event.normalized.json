@@ -6,7 +6,7 @@
   "properties": {
     "trace_id": {"type": "string", "description": "Stable trace id across the workflow"},
     "event_id": {"type": "string", "description": "Idempotency key for inbound webhook/event"},
-    "source": {"type": "string", "enum": ["github"], "description": "Origin system"},
+    "source": {"type": "string", "enum": ["github", "antfarm"], "description": "Origin system"},
     "kind": {
       "type": "string",
       "enum": [
@@ -14,7 +14,8 @@
         "github.pull_request.synchronize",
         "github.issue_comment.created",
         "github.check_suite.completed",
-        "github.workflow_run.completed"
+        "github.workflow_run.completed",
+        "antfarm.message.created"
       ]
     },
     "timestamp": {"type": "string", "format": "date-time"},
@@ -34,6 +35,7 @@
         "url": {"type": "string"}
       }
     },
+    "room": {"type": "string", "description": "Ant Farm room name (antfarm source only)"},
     "refs": {
       "type": "object",
       "description": "Pointers the IDE agent can act on",
