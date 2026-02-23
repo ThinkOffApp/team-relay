@@ -118,7 +118,7 @@ def _post_ack(room: str, text: str) -> None:
     subprocess.run(
         [
             "curl", "-sS", "-X", "POST", f"{BASE_URL}/messages",
-            "-H", f"Authorization: Bearer {API_KEY}",
+            "-H", f"X-API-Key: {API_KEY}",
             "-H", "Content-Type: application/json",
             "-d", payload,
         ],
@@ -132,7 +132,7 @@ def _post_ack(room: str, text: str) -> None:
 def _fetch_room_messages(room: str) -> List[dict]:
     result = subprocess.run(
         [
-            "curl", "-sS", "-H", f"Authorization: Bearer {API_KEY}",
+            "curl", "-sS", "-H", f"X-API-Key: {API_KEY}",
             f"{BASE_URL}/rooms/{room}/messages?limit={FETCH_LIMIT}",
         ],
         capture_output=True,
