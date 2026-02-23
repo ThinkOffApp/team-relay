@@ -14,10 +14,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env.local"
-API_KEY="$(grep "^GEMINIMB_API_KEY=" "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- || true)"
-if [[ -z "${API_KEY:-}" ]]; then
-  API_KEY="${GEMINIMB_API_KEY:-REDACTED_GEMINIMB_KEY}"
+
+# NEVER hardcode API keys - use env vars only
+API_KEY="${IAK_API_KEY:-${GEMINIMB_API_KEY:-}}"
+if [[ -z "$API_KEY" ]]; then
+  echo "ERROR: Set IAK_API_KEY or GEMINIMB_API_KEY env var" >&2
+  exit 1
 fi
 
 BASE_URL="https://antfarm.world/api/v1"
@@ -34,6 +36,7 @@ SEEN_MAX="${SEEN_MAX:-500}"
 
 SEEN_IDS_FILE="/tmp/geminimb_room_autopost_seen_ids.txt"
 ACKED_IDS_FILE="/tmp/geminimb_room_autopost_acked_ids.txt"
+LOCK_FILE="/tmp/geminimb_room_autopost.pid"
 
 has_id() {
   local file="$1"
@@ -51,7 +54,7 @@ record_id() {
 prime_seen_ids() {
   local room="$1"
   local response
-  response="$(curl -sS -H "Authorization: Bearer $API_KEY" "$BASE_URL/rooms/$room/messages?limit=50" 2>/dev/null || true)"
+  response="$(curl -sS -H "X-API-Key: $API_KEY" "$BASE_URL/rooms/$room/messages?limit=50" 2>/dev/null || true)"
   [[ -z "$response" ]] && return 0
   echo "$response" | python3 -c '
 import json, sys
@@ -202,7 +205,7 @@ PY
 
   local res
   if ! res="$(curl -sS -X POST \
-    -H "Authorization: Bearer $API_KEY" \
+    -H "X-API-Key: $API_KEY" \
     -H "Content-Type: application/json" \
     -d "$payload" \
     "$BASE_URL/messages")"; then
@@ -256,6 +259,18 @@ if [[ "${1:-}" == "tmux" ]]; then
   exit 0
 fi
 
+# --- PID lock: prevent duplicate pollers ---
+if [[ -f "$LOCK_FILE" ]]; then
+  OLD_PID="$(cat "$LOCK_FILE" 2>/dev/null || true)"
+  if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Another geminimb poller already running (PID $OLD_PID). Exiting."
+    exit 0
+  fi
+  rm -f "$LOCK_FILE"
+fi
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"; exit 0' EXIT INT TERM
+
 touch "$SEEN_IDS_FILE" "$ACKED_IDS_FILE"
 IFS=',' read -r -a ROOMS_ARRAY <<< "$ROOMS_CSV"
 if [[ "$PRIME_ON_START" == "1" ]]; then
@@ -274,7 +289,7 @@ while true; do
     room="$(echo "$raw_room" | xargs)"
     [[ -z "$room" ]] && continue
 
-    response="$(curl -sS -H "Authorization: Bearer $API_KEY" "$BASE_URL/rooms/$room/messages?limit=$FETCH_LIMIT" 2>/dev/null || true)"
+    response="$(curl -sS -H "X-API-Key: $API_KEY" "$BASE_URL/rooms/$room/messages?limit=$FETCH_LIMIT" 2>/dev/null || true)"
     if [[ -z "$response" ]]; then
       echo "[$(date +%H:%M:%S)] fetch empty room=$room"
       continue
