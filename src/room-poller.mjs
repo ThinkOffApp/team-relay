@@ -90,6 +90,57 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
     console.log(`  seeded ${seen.size} IDs`);
   }
 
+  const ackEnabled = config?.poller?.ack_enabled !== false;
+  const ownerHandle = (config?.poller?.owner_handle || 'petrus').toLowerCase();
+
+  const TASK_HINTS = [
+    'can you', 'please', 'need to', 'check', 'fix', 'update', 'review',
+    'run', 'deploy', 'implement', 'test', 'restart', 'install', 'respond',
+    'post', 'pull', 'push', 'merge'
+  ];
+
+  function extractMentions(text) {
+    const matches = text.match(/@([a-zA-Z0-9_.-]+)/g) || [];
+    return matches.map(m => m.toLowerCase());
+  }
+
+  function messageTargetsMe(body) {
+    const mentions = extractMentions(body);
+    const myShort = selfHandle.toLowerCase().replace('@', '');
+    if (mentions.length > 0) {
+      return mentions.some(m => m.replace('@', '') === myShort);
+    }
+    return true; // Treat generic owner imperatives as targeted
+  }
+
+  function looksLikeTaskRequest(body) {
+    const text = (body || '').trim().toLowerCase();
+    if (!text) return false;
+    return TASK_HINTS.some(hint => text.includes(hint));
+  }
+
+  function shouldAck(sender, body) {
+    const fromOwner = sender.toLowerCase().includes(ownerHandle);
+    if (!fromOwner) return false;
+    if (!messageTargetsMe(body)) return false;
+    return looksLikeTaskRequest(body);
+  }
+
+  async function postAck(room) {
+    const payload = JSON.stringify({
+      room,
+      body: `@${ownerHandle} [${selfHandle.replace('@', '')}] starting now. I will report back when finished with results.`
+    });
+    try {
+      execSync(
+        `curl -sS -X POST "${BASE_URL}/messages" -H "X-API-Key: ${apiKey}" -H "Content-Type: application/json" -d '${payload.replace(/'/g, "'\\''")}'`,
+        { timeout: 15000 }
+      );
+    } catch (e) {
+      console.error(`  post ack failed: ${e.message}`);
+    }
+  }
+
   async function poll() {
     let newCount = 0;
     for (const room of rooms) {
@@ -121,6 +172,11 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
         newCount++;
 
         console.log(`  [${ts.slice(0, 19)}] ${sender} in ${room}: ${body.slice(0, 80)}...`);
+
+        if (ackEnabled && shouldAck(sender, body)) {
+          await postAck(room);
+          console.log(`  posted auto-ack for task from ${sender}`);
+        }
       }
     }
 
