@@ -23,6 +23,14 @@ ACKED_FILE = os.getenv("IAK_ACKED_FILE", "/tmp/iak_acked_ids.txt")
 NEW_FILE = os.getenv("IAK_NEW_FILE", "/tmp/iak_new_messages.txt")
 FETCH_LIMIT = int(os.getenv("IAK_FETCH_LIMIT", "20"))
 ACK_ENABLED = os.getenv("IAK_ACK_ENABLED", "1").lower() not in ("0", "false", "no")
+# Listen modes: "all" = every message, "humans" = skip bot messages,
+# "tagged" = only when @mentioned, "owner" = only from owner
+LISTEN_MODE = os.getenv("IAK_LISTEN_MODE", "all").lower()
+BOT_HANDLES = tuple(
+    h.strip() for h in os.getenv(
+        "IAK_BOT_HANDLES", ""
+    ).split(",") if h.strip()
+)
 
 TASK_HINTS = (
     "can you", "please", "need to", "check", "fix", "update", "review",
@@ -48,6 +56,33 @@ def _save_id_set(path: str, values: Iterable[str], keep_last: int = 1000) -> Non
 
 def _extract_mentions(text: str) -> List[str]:
     return [m.lower() for m in re.findall(r"@([a-zA-Z0-9_.-]+)", text or "")]
+
+
+def _is_bot(handle: str, author_handle: str) -> bool:
+    """Heuristic: a sender is a bot if its handle starts with @ or is in BOT_HANDLES."""
+    h = str(author_handle or handle or "").lower().lstrip("@")
+    if BOT_HANDLES and h in {b.lower().lstrip("@") for b in BOT_HANDLES}:
+        return True
+    # Ant Farm bot handles typically start with @
+    if str(handle).startswith("@"):
+        return True
+    return False
+
+
+def _passes_listen_filter(handle: str, author_handle: str, body: str) -> bool:
+    """Return True if this message should be forwarded based on LISTEN_MODE."""
+    if LISTEN_MODE == "all":
+        return True
+    if LISTEN_MODE == "humans":
+        return not _is_bot(handle, author_handle)
+    if LISTEN_MODE == "tagged":
+        my_short = {h.lower().lstrip("@") for h in MY_HANDLES}
+        mentions = _extract_mentions(body)
+        return any(m in my_short for m in mentions)
+    if LISTEN_MODE == "owner":
+        return OWNER_HANDLE in str(author_handle).lower() or OWNER_HANDLE in str(handle).lower()
+    # Unknown mode, default to all
+    return True
 
 
 def _message_targets_me(body: str) -> bool:
@@ -128,11 +163,17 @@ def main() -> int:
 
             handle = str(msg.get("from", "?"))
             author_handle = str(msg.get("author", {}).get("handle", handle))
+            # Always skip own messages
             if author_handle in MY_HANDLES or handle in MY_HANDLES:
                 continue
 
             body = str(msg.get("body", ""))[:1000]
             ts = str(msg.get("created_at", ""))[:19]
+
+            # Apply listen mode filter
+            if not _passes_listen_filter(handle, author_handle, body):
+                continue
+
             new_msgs.append(f"[{ts}] [{room}] {author_handle}: {body[:400]}")
 
             if ACK_ENABLED and mid not in acked and _should_ack(handle, author_handle, body):

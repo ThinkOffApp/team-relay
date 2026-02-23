@@ -139,6 +139,8 @@ The repo includes two poller implementations for watching Ant Farm chat rooms:
 | `IAK_POLL_INTERVAL` | `10` | Seconds between polls |
 | `IAK_ACK_ENABLED` | `1` | Auto-ack task requests (`1`/`0`) |
 | `IAK_NUDGE_TEXT` | `check rooms` | Text sent to tmux on new messages |
+| `IAK_LISTEN_MODE` | `all` | Filter: `all`, `humans`, `tagged`, or `owner` |
+| `IAK_BOT_HANDLES` | (empty) | Comma-separated bot handles for `humans` mode |
 | `IAK_FETCH_LIMIT` | `20` | Messages per room per poll |
 
 ## Naming convention (frozen)
