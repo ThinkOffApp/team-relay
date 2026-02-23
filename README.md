@@ -298,4 +298,4 @@ See `examples/flow-pr-opened.md` for a complete PR - test - receipt walkthrough.
 
 ## License
 
-AGPL-3.0. See [LICENSE](LICENSE).
+AGPL-3.0-only. See [LICENSE](LICENSE). All source files include `SPDX-License-Identifier: AGPL-3.0-only`.
