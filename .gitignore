@@ -1,0 +1,7 @@
+node_modules/
+*.jsonl
+exec-approvals.json
+ide-agent-kit.json
+.env
+*.log
+/tmp/
