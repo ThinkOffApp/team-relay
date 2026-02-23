@@ -15,12 +15,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# API key from env (do not hardcode secrets in repo)
-API_KEY="${IAK_API_KEY:-${GEMINIMB_API_KEY:-}}"
-if [ -z "$API_KEY" ]; then
-  echo "ERROR: Set IAK_API_KEY or GEMINIMB_API_KEY env var" >&2
-  exit 1
-fi
+# Define the GeminiMB API Key directly as requested
+API_KEY="REDACTED_GEMINIMB_KEY"
 
 BASE_URL="https://antfarm.world/api/v1"
 ROOMS_CSV="${ROOMS:-feature-admin-planning,thinkoff-development}"
@@ -182,12 +178,14 @@ PY
     # Nudge the actual LLM GUI by writing to the IDE Agent kit queue
     if echo "$reply_body" | grep -q "starting now"; then
       local queue_file="${QUEUE_PATH:-$ROOT_DIR/ide-agent-queue.jsonl}"
-      python3 - "$room" "$from_handle" "$src_body" "$queue_file" <<'PYQ'
+      python3 - "$room" "$from_handle" "$src_body" "$src_key" "$queue_file" <<'PYQ'
 import sys, json, uuid, datetime
 local_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
-room, handle, body, out_file = sys.argv[1:5]
+room, handle, body, src_key, out_file = sys.argv[1:6]
+msg_id = src_key.split("::")[-1] if "::" in src_key else src_key
 event = {
     "trace_id": str(uuid.uuid4()),
+    "event_id": msg_id,
     "source": "antfarm",
     "kind": "antfarm.message.created",
     "timestamp": local_time,
