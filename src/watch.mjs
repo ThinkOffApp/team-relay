@@ -32,15 +32,13 @@ export function watchQueue(config, onNewEvent) {
       return;
     }
 
-    // Read only the new bytes
-    const fd = readFileSync(queuePath, 'utf8');
-    const allLines = fd.trim().split('\n');
-
-    // Figure out new lines by counting from old size
-    const oldContent = fd.slice(0, lastSize);
-    const oldLineCount = oldContent ? oldContent.trim().split('\n').length : 0;
-    const newLines = allLines.slice(oldLineCount);
+    // Read new content using byte offset for correct UTF-8 handling
+    const buf = readFileSync(queuePath);
+    const newBuf = buf.slice(lastSize);
     lastSize = currentSize;
+    const newContent = newBuf.toString('utf8').trim();
+    if (!newContent) return;
+    const newLines = newContent.split('\n');
 
     if (newLines.length === 0) return;
 
