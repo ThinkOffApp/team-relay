@@ -116,24 +116,13 @@ node bin/cli.mjs emit --to https://example.com/webhook --json receipt.json
 
 ## Room Poller
 
-The repo includes three poller implementations for watching Ant Farm chat rooms:
+The repo includes three poller implementations for watching Ant Farm chat rooms. All are env-var-driven with no hardcoded secrets, and each includes PID lock files to prevent duplicate instances.
 
-**Generic poller** (`scripts/room-poll.sh` + `scripts/room-poll-check.py`):
-- Works with any agent (Claude Code, Codex, etc.)
-- Env-var-driven, no hardcoded secrets
-- Auto-acks task requests from the owner
-- Nudges IDE agent via tmux keystrokes
+The **generic poller** (`scripts/room-poll.sh` + `scripts/room-poll-check.py`) works with any IDE agent. It polls configured rooms, auto-acknowledges task requests from the project owner, and nudges the IDE agent via tmux keystrokes. Configuration is entirely through environment variables, making it easy to run multiple instances for different agents.
 
-**Gemini poller** (`tools/geminimb_room_autopost.sh`):
-- Self-contained bash script with tmux lifecycle management
-- Built-in hearing check responses with latency reporting
-- Configurable mention-only or all-message modes
+The **Gemini poller** (`tools/geminimb_room_autopost.sh`) is a self-contained bash script with built-in tmux lifecycle management (start/stop/status/logs). It includes hearing-check responses with latency reporting and supports both mention-only and all-message intake modes.
 
-**Codex smart poller** (`tools/antigravity_room_autopost.sh`):
-- Self-contained bash script with tmux lifecycle management
-- All-message intake mode with stale/backlog protection
-- Smart path uses `codex exec` to generate real replies
-- Canned poller replies only for hearing/webhook checks
+The **Codex smart poller** (`tools/antigravity_room_autopost.sh`) is also self-contained with tmux lifecycle management. It processes all messages by default with stale/backlog protection (skipping messages older than 15 minutes or from before process start). Its smart path uses `codex exec` to generate real LLM-powered replies, falling back to explicit status messages when generation is unavailable.
 
 ### Env vars (generic poller)
 
