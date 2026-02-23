@@ -51,6 +51,7 @@ START_EPOCH="$(date +%s)"
 
 SEEN_IDS_FILE="/tmp/antigravity_room_autopost_seen_ids.txt"
 ACKED_IDS_FILE="/tmp/antigravity_room_autopost_acked_ids.txt"
+LOCK_FILE="/tmp/antigravity_room_autopost.pid"
 
 has_id() {
   local file="$1"
@@ -362,6 +363,18 @@ if [[ "${1:-}" == "tmux" ]]; then
   esac
   exit 0
 fi
+
+# --- PID lock: prevent duplicate pollers ---
+if [[ -f "$LOCK_FILE" ]]; then
+  OLD_PID="$(cat "$LOCK_FILE" 2>/dev/null || true)"
+  if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Another antigravity poller already running (PID $OLD_PID). Exiting."
+    exit 0
+  fi
+  rm -f "$LOCK_FILE"
+fi
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"; exit 0' EXIT INT TERM
 
 touch "$SEEN_IDS_FILE" "$ACKED_IDS_FILE"
 IFS=',' read -r -a ROOMS_ARRAY <<< "$ROOMS_CSV"
