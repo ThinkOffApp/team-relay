@@ -67,7 +67,7 @@ record_id() {
 prime_seen_ids() {
   local room="$1"
   local response
-  response="$(curl -sS -H "Authorization: Bearer $API_KEY" "$BASE_URL/rooms/$room/messages?limit=50" 2>/dev/null || true)"
+  response="$(curl -sS -H "X-API-Key: $API_KEY" "$BASE_URL/rooms/$room/messages?limit=50" 2>/dev/null || true)"
   [[ -z "$response" ]] && return 0
   echo "$response" | python3 -c '
 import json, sys
@@ -412,7 +412,7 @@ while true; do
     room="$(echo "$raw_room" | xargs)"
     [[ -z "$room" ]] && continue
 
-    response="$(curl -sS -H "Authorization: Bearer $API_KEY" "$BASE_URL/rooms/$room/messages?limit=$FETCH_LIMIT" 2>/dev/null || true)"
+    response="$(curl -sS -H "X-API-Key: $API_KEY" "$BASE_URL/rooms/$room/messages?limit=$FETCH_LIMIT" 2>/dev/null || true)"
     if [[ -z "$response" ]]; then
       echo "[$(date +%H:%M:%S)] fetch empty room=$room"
       continue
