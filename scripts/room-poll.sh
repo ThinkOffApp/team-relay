@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Room poller wrapper - checks rooms and nudges tmux on new work.
 set -u
 

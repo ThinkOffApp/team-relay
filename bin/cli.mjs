@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { parseArgs } from 'node:util';
 import { loadConfig } from '../src/config.mjs';
 import { tmuxRun } from '../src/tmux-runner.mjs';

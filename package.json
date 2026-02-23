@@ -10,8 +10,19 @@
     "test": "node --test test/*.test.mjs",
     "start": "node bin/cli.mjs serve"
   },
-  "keywords": ["ide", "agent", "ai", "webhook", "tmux", "receipts", "openclaw", "gateway", "sessions", "governance"],
-  "license": "MIT",
+  "keywords": [
+    "ide",
+    "agent",
+    "ai",
+    "webhook",
+    "tmux",
+    "receipts",
+    "openclaw",
+    "gateway",
+    "sessions",
+    "governance"
+  ],
+  "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=18"
   }
