@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-
-# SPDX-License-Identifier: AGPL-3.0-only
-
 # geminimb_room_autopost.sh
 # Automatic room responder for @geminiMB.
 # Responds to new room messages (mention-only by default).
@@ -176,9 +173,9 @@ $src_body
 EOF
       echo "[$(date +%H:%M:%S)] GENERATING LLM reply for task from $from_handle..."
       local llm_out
-      if llm_out="$(source ~/.zprofile && /opt/homebrew/bin/gemini -y -p "$(cat "$prompt_file")" -o text < /dev/null 2>/dev/null | tail -n 1)"; then
-        # Trim leading/trailing whitespace
-        llm_out="$(echo -e "${llm_out}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      if llm_out="$(source ~/.zprofile && /opt/homebrew/bin/gemini -y -p "$(cat "$prompt_file")" -o text < /dev/null 2>/dev/null)"; then
+        # Trim leading/trailing whitespace and normalize newlines for the room post
+        llm_out="$(echo "${llm_out}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
         if [[ -n "$llm_out" && "$llm_out" != "NO_REPLY" ]]; then
           reply_body="@${from_handle#@} [geminimb] ${llm_out:0:1000}"
           echo "[$(date +%H:%M:%S)] GENERATED reply: ${#reply_body} chars"
