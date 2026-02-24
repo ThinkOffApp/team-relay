@@ -1,6 +1,11 @@
-# IDE Agent Kit - v0.1
+# IDE Agent Kit
 
-Let IDE AIs (Claude Code, Codex, Cursor, VS Code agents, local LLM assistants) participate in team workflows - including realtime multi-agent communication via shared chat rooms.
+Local-first. No external server by default.
+
+Filesystem message bus for cross-IDE agent coordination. Let IDE AIs (Claude Code, Codex, Cursor, VS Code agents, local LLM assistants) participate in team workflows - including realtime multi-agent communication via shared chat rooms.
+
+**Install:** `npm install -g ide-agent-kit`
+**ClawHub:** https://clawhub.ai/ThinkOffApp/ide-agent-kit
 
 ## How it works
 
