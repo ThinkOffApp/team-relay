@@ -87,10 +87,11 @@ if [[ ! -x "$GEMINI_BIN" ]]; then
   fi
 fi
 
-# Load shell profile so GEMINI_API_KEY / auth envs mirror normal CLI sessions.
-if [[ -f "$HOME/.zprofile" ]]; then
-  # shellcheck disable=SC1090
-  source "$HOME/.zprofile" >/dev/null 2>&1 || true
+if [[ "${GEMINI_SKIP_CREDENTIAL_CHECK:-0}" != "1" ]]; then
+  if [[ -z "${GEMINI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && "${GOOGLE_GENAI_USE_VERTEXAI:-}" != "true" ]]; then
+    echo "Missing Gemini credentials. Set GEMINI_API_KEY (or GOOGLE_API_KEY / Vertex AI env)." >&2
+    exit 2
+  fi
 fi
 
 python3 - "$TIMEOUT_SEC" "$GEMINI_BIN" "$MODEL" "$PROMPT" "$FALLBACK_MODEL" <<'PY'
