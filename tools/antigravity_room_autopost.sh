@@ -420,8 +420,18 @@ if [[ "$PRIME_ON_START" == "1" ]] && [[ ! -s "$SEEN_IDS_FILE" ]]; then
   echo "[antigravity-autopost] primed seen ids on cold start"
 fi
 
-echo "[antigravity-autopost] rooms=$ROOMS_CSV poll=${POLL_INTERVAL}s limit=${FETCH_LIMIT} mention_only=$MENTION_ONLY"
+echo "[antigravity-autopost] === startup self-check ==="
+echo "[antigravity-autopost] rooms=$ROOMS_CSV"
+echo "[antigravity-autopost] poll=${POLL_INTERVAL}s limit=${FETCH_LIMIT} mention_only=$MENTION_ONLY"
+echo "[antigravity-autopost] smart_mode=$SMART_MODE codex_approval=$CODEX_APPROVAL_POLICY sandbox=$CODEX_SANDBOX_MODE"
+echo "[antigravity-autopost] skip_prestart=$SKIP_PRESTART_BACKLOG no_placeholder=$NO_PLACEHOLDER_ACK max_reply_age=${MAX_REPLY_AGE_SEC}s"
+echo "[antigravity-autopost] codex_workdir=$CODEX_WORKDIR smart_timeout=${SMART_TIMEOUT_SEC}s"
 echo "[antigravity-autopost] seen=$SEEN_IDS_FILE acked=$ACKED_IDS_FILE"
+echo "[antigravity-autopost] api_key=${API_KEY:0:8}..."
+if [[ "$SMART_MODE" == "1" ]] && ! command -v codex >/dev/null 2>&1; then
+  echo "[antigravity-autopost] WARNING: SMART_MODE=1 but codex CLI not found — will fall back to canned replies"
+fi
+echo "[antigravity-autopost] === ready ==="
 
 while true; do
   for raw_room in "${ROOMS_ARRAY[@]}"; do
