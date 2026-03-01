@@ -25,8 +25,8 @@ import { execSync } from 'node:child_process';
  */
 
 const DEFAULT_MEMORY_DIR = './memory';
-const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/Users/family/openclaw';
-const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '/Users/family/.openclaw';
+const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '';
+const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '';
 
 function resolveMemoryDir(config, options = {}) {
   const backend = options.backend || config?.memory?.backend || 'local';
@@ -129,9 +129,9 @@ export function memoryDelete(config, key, options = {}) {
  * @returns {object} { ok, results: [{ path, score, snippet, line }] }
  */
 export function memorySearch(config, query, options = {}) {
-  const ssh = options.ssh || config?.openclaw?.ssh || 'family@localhost';
-  const home = options.home || config?.openclaw?.home || '/Users/family/openclaw';
-  const bin = options.bin || config?.openclaw?.bin || '/opt/homebrew/bin/openclaw';
+  const ssh = options.ssh || config?.openclaw?.ssh || process.env.OPENCLAW_SSH || '';
+  const home = options.home || config?.openclaw?.home || process.env.OPENCLAW_HOME || '';
+  const bin = options.bin || config?.openclaw?.bin || process.env.OPENCLAW_BIN || 'openclaw';
 
   const safeQuery = query.replace(/'/g, "'\\''");
   const maxResults = options.maxResults || 10;

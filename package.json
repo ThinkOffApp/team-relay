@@ -30,5 +30,14 @@
   "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ThinkOffApp/ide-agent-kit.git"
+  },
+  "homepage": "https://github.com/ThinkOffApp/ide-agent-kit#readme",
+  "author": "ThinkOff",
+  "bugs": {
+    "url": "https://github.com/ThinkOffApp/ide-agent-kit/issues"
   }
 }

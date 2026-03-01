@@ -12,15 +12,15 @@ import { execSync } from 'node:child_process';
  * set openclaw.ssh in config to route via SSH.
  *
  * Config:
- *   openclaw.home  — OPENCLAW_HOME path (default: /Users/family/openclaw)
- *   openclaw.ssh   — SSH target for remote execution (e.g., "family@localhost")
- *   openclaw.bin   — Path to openclaw binary (default: /opt/homebrew/bin/openclaw)
+ *   openclaw.home  — OPENCLAW_HOME path (env: OPENCLAW_HOME)
+ *   openclaw.ssh   — SSH target for remote execution (e.g., "user@localhost")
+ *   openclaw.bin   — Path to openclaw binary (env: OPENCLAW_BIN, default: "openclaw")
  */
 
 const DEFAULTS = {
-  home: '/Users/family/openclaw',
-  bin: '/opt/homebrew/bin/openclaw',
-  ssh: 'family@localhost'
+  home: process.env.OPENCLAW_HOME || '',
+  bin: process.env.OPENCLAW_BIN || 'openclaw',
+  ssh: process.env.OPENCLAW_SSH || ''
 };
 
 function resolveOC(config, options = {}) {

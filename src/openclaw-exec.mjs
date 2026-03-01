@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto';
  *   ./exec-approvals.json           — team-relay approval queue
  */
 
-const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '/Users/family/.openclaw';
+const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '';
 
 function resolveApprovalFile(config) {
   return config?.exec?.approvalFile || './exec-approvals.json';

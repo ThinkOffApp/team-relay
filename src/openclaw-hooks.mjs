@@ -22,7 +22,7 @@ import { join } from 'node:path';
  * Each hook is a directory with HOOK.md (YAML frontmatter) + handler.ts.
  */
 
-const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '/Users/family/.openclaw';
+const OPENCLAW_DATA = process.env.OPENCLAW_DATA || '';
 
 /**
  * List installed hooks from managed and workspace directories.

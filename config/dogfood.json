@@ -23,7 +23,7 @@
     ]
   },
   "github": {
-    "webhook_secret": "",
+    "webhook_secret": "CHANGE_ME",
     "event_kinds": [
       "pull_request",
       "issue_comment"
@@ -36,66 +36,45 @@
     "message_interval_sec": 30
   },
   "openclaw": {
-    "home": "/Users/family/openclaw",
-    "bin": "/opt/homebrew/bin/openclaw",
-    "ssh": "family@localhost",
+    "home": "$OPENCLAW_HOME",
+    "bin": "openclaw",
+    "ssh": "",
     "host": "127.0.0.1",
     "port": 18791,
-    "token": ""
+    "token": "CHANGE_ME"
   },
   "discord": {
     "channels": [
-      { "id": "1474426061218386094", "name": "general" },
-      { "id": "1474427350434189352", "name": "agent-puzzles" },
-      { "id": "1474427384945184932", "name": "outreach" },
-      { "id": "1474427386693943296", "name": "bot-fleet" },
-      { "id": "1474427387621015606", "name": "dev" }
+      { "id": "CHANGE_ME", "name": "general" }
     ],
     "interval_sec": 30,
-    "self_id": "1474422169470636134",
+    "self_id": "CHANGE_ME",
     "skip_bots": false,
     "seen_file": "/tmp/iak-discord-seen.txt"
   },
   "poller": {
-    "rooms": ["thinkoff-development", "feature-admin-planning", "lattice-qcd"],
-    "api_key": "REDACTED_ANTFARM_KEY",
-    "handle": "@claudemm",
+    "rooms": ["your-room-name"],
+    "api_key": "CHANGE_ME",
+    "handle": "@your-agent",
     "interval_sec": 10,
-    "owner_handle": "petrus",
+    "owner_handle": "your-username",
     "ack_enabled": false,
     "seen_file": "/tmp/iak-seen-ids.txt"
   },
   "moltbook": {
     "api_base": "https://www.moltbook.com/api/v1",
     "accounts": [
-      { "name": "SallyGPBot", "api_key": "REDACTED_MOLTBOOK_KEY_1" },
-      { "name": "agentpuzzleshq", "api_key": "REDACTED_MOLTBOOK_KEY_2" },
-      { "name": "Klaus_OpenClaw", "api_key": "REDACTED_MOLTBOOK_KEY_3" }
+      { "name": "your-account", "api_key": "CHANGE_ME" }
     ],
-    "default_account": "agentpuzzleshq"
+    "default_account": "your-account"
   },
   "comments": {
     "moltbook": {
-      "posts": [
-        "c827bb23-0779-41bb-8814-ce0d0b733103",
-        "2f5001f9-c96f-493c-ade9-455400abccaa",
-        "0c1eea58-9ed3-4b13-b644-63c22f3a6d34",
-        "3253574f-6236-4f2e-8e02-6f354a424eaf",
-        "562faad7-f9cc-49a3-8520-2bdf362606bb",
-        "dc39a282-5160-4c62-8bd9-ace12580a5f1",
-        "2fdd8e55-1fde-43c9-b513-9483d0be8e38",
-        "cbd6474f-8478-4894-95f1-7b104a73bcd5",
-        "13821188-c693-4b20-91c9-9e37b1523621",
-        "1ea4e45d-31b6-4816-9404-b830544b0da8"
-      ]
+      "posts": []
     },
     "github": {
       "repos": [
-        { "owner": "ThinkOffApp", "repo": "ide-agent-kit", "type": "issues" },
-        { "owner": "HKUDS", "repo": "nanobot", "number": 431, "type": "discussion" },
-        { "owner": "anthropics", "repo": "claude-code", "number": 28520, "type": "issues" },
-        { "owner": "bradygaster", "repo": "squad", "number": 24, "type": "issues" },
-        { "owner": "microsoft", "repo": "agent-framework", "number": 1092, "type": "discussion" }
+        { "owner": "your-org", "repo": "your-repo", "type": "issues" }
       ]
     },
     "interval_sec": 120,
@@ -105,17 +84,17 @@
     "rules": [
       {
         "name": "owner-task-nudge",
-        "match": { "sender": "petrus", "mention": "@claudemm" },
+        "match": { "sender": "your-username", "mention": "@your-agent" },
         "action": { "type": "nudge", "text": "check rooms" }
       },
       {
         "name": "check-comments-request",
-        "match": { "sender": "petrus", "keywords": ["check comments", "poll comments", "new comments"] },
+        "match": { "sender": "your-username", "keywords": ["check comments", "poll comments", "new comments"] },
         "action": { "type": "nudge", "text": "check comments" }
       },
       {
         "name": "status-request",
-        "match": { "sender": "petrus", "keywords": ["status", "how are you"] },
+        "match": { "sender": "your-username", "keywords": ["status", "how are you"] },
         "action": { "type": "nudge", "text": "check rooms" }
       }
     ],

@@ -27,9 +27,9 @@ import { randomUUID } from 'node:crypto';
 const SEEN_FILE_DEFAULT = '/tmp/iak-discord-seen.txt';
 
 const OC_DEFAULTS = {
-  home: '/Users/family/openclaw',
-  bin: '/opt/homebrew/bin/openclaw',
-  ssh: 'family@localhost'
+  home: process.env.OPENCLAW_HOME || '',
+  bin: process.env.OPENCLAW_BIN || 'openclaw',
+  ssh: process.env.OPENCLAW_SSH || ''
 };
 
 function loadSeenIds(path) {
