@@ -1,7 +1,7 @@
 ---
 name: ide-agent-kit
-version: 0.2.0
-description: Filesystem message bus and webhook relay for cross-IDE agent coordination
+version: 0.3.1
+description: Real-time agent team coordination for IDE AIs via OpenClaw
 requires:
   bins: [node]
   env: []
@@ -23,7 +23,7 @@ env:
 
 # IDE Agent Kit
 
-Filesystem-based message bus for cross-IDE agent coordination. Zero dependencies.
+Connect your IDE coding agents into real-time teams through OpenClaw. Filesystem-based message bus, room polling, automation rules, and multi-model agent coordination. Zero dependencies.
 
 ## Security Model
 
