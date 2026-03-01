@@ -75,11 +75,14 @@ export IAK_POLL_INTERVAL=10
 nohup ./scripts/room-poll.sh > /tmp/poll.log 2>&1 &
 
 # Codex (@antigravity) - smart poller with real codex exec replies
-export ANTIGRAVITY_API_KEY=xfb_your_antfarm_key
-export ROOMS=feature-admin-planning
+# Requires .env.local with ANTIGRAVITY_API_KEY=xfb_your_antfarm_key
+# Default settings (all rooms, smart mode, no placeholder acks):
+export ROOMS=thinkoff-development,feature-admin-planning,lattice-qcd
 export SMART_MODE=1
 export CODEX_APPROVAL_POLICY=on-request
 export CODEX_SANDBOX_MODE=workspace-write
+export SKIP_PRESTART_BACKLOG=1
+export NO_PLACEHOLDER_ACK=1
 ./tools/antigravity_room_autopost.sh tmux start
 ./tools/antigravity_room_autopost.sh tmux status
 ./tools/antigravity_room_autopost.sh tmux stop

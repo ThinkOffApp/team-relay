@@ -28,7 +28,7 @@ if [[ -z "${API_KEY:-}" ]]; then
 fi
 
 BASE_URL="https://antfarm.world/api/v1"
-ROOMS_CSV="${ROOMS:-feature-admin-planning}"
+ROOMS_CSV="${ROOMS:-thinkoff-development,feature-admin-planning,lattice-qcd}"
 POLL_INTERVAL="${POLL_INTERVAL:-8}"
 FETCH_LIMIT="${FETCH_LIMIT:-30}"
 SESSION="${SESSION:-antigravity-room-autopost}"
@@ -375,7 +375,18 @@ if [[ "${1:-}" == "tmux" ]]; then
         echo "$SESSION already running"
         exit 0
       fi
-      tmux new-session -d -s "$SESSION" "$0"
+      # Forward all relevant env vars into the tmux child session
+      local env_prefix=""
+      for var in ROOMS POLL_INTERVAL FETCH_LIMIT MENTION_ONLY SMART_MODE \
+                 CODEX_WORKDIR SMART_TIMEOUT_SEC CODEX_APPROVAL_POLICY \
+                 CODEX_SANDBOX_MODE MAX_REPLY_AGE_SEC SKIP_PRESTART_BACKLOG \
+                 NO_PLACEHOLDER_ACK PRIME_ON_START RESPOND_TO_HANDLE \
+                 AUTORESPONDER_ENABLED REAL_REPLY_ONLY; do
+        if [[ -n "${!var:-}" ]]; then
+          env_prefix="${env_prefix}${var}=${!var} "
+        fi
+      done
+      tmux new-session -d -s "$SESSION" "env ${env_prefix}$0"
       echo "Started $SESSION (rooms=$ROOMS_CSV interval=${POLL_INTERVAL}s mention_only=$MENTION_ONLY)"
       ;;
     *)
