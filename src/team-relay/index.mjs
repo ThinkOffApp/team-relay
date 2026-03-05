@@ -13,6 +13,9 @@ export { moltbookPost, moltbookFeed } from './moltbook.mjs';
 export { canSend, waitUntilReady, markSent } from './rate-limiter.mjs';
 export { isEnabled as acpIsEnabled, createSession, sendToSession, closeSession, getSession, listSessions } from './acp-sessions.mjs';
 
+// Task Queue / Mission Control
+export { initTaskQueue, addTask, startTask, completeTask, failTask, cancelTask, getTask, listTasks, nextTask, agentStatus, missionControlData } from './task-queue.mjs';
+
 // Adapters
 export { antfarmAdapter } from './adapters/antfarm.mjs';
 export { discordAdapter } from './adapters/discord.mjs';

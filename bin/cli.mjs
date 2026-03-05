@@ -20,6 +20,7 @@ import { discordAdapter } from '../src/team-relay/adapters/discord.mjs';
 import { xforAdapter } from '../src/team-relay/adapters/xfor.mjs';
 import { commentsAdapter } from '../src/team-relay/adapters/comments.mjs';
 import { isEnabled as acpIsEnabled, createSession as acpCreate, sendToSession as acpSend, closeSession as acpClose, getSession as acpGet, listSessions as acpList } from '../src/team-relay/acp-sessions.mjs';
+import { initTaskQueue, addTask, startTask, completeTask, failTask, cancelTask, listTasks, nextTask, missionControlData } from '../src/team-relay/task-queue.mjs';
 // --- ide-specific ---
 import { tmuxRun } from '../src/ide/tmux-runner.mjs';
 import { watchQueue } from '../src/ide/watch.mjs';
@@ -973,6 +974,75 @@ async function main() {
     }
 
     console.error('Usage: ide-agent-kit acp <spawn|list|status|send|close>');
+    process.exit(1);
+  }
+
+  // ── Tasks / Mission Control ─────────────────────────
+  if (command === 'tasks') {
+    const opts = parseKV(args, subcommand || 'tasks');
+    const config = loadConfig(opts.config);
+    const tasksFile = config.tasks?.file || '.iak-tasks.json';
+    initTaskQueue(tasksFile);
+
+    if (subcommand === 'add') {
+      if (!opts.agent || !opts.title) { console.error('Error: --agent and --title are required'); process.exit(1); }
+      const task = addTask(opts.agent, opts.title, { priority: parseInt(opts.priority || '0', 10) });
+      console.log(`Task added: ${task.id}  ${task.agent}  ${task.title}`);
+      return;
+    }
+
+    if (subcommand === 'start') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = startTask(opts.task);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} started: ${task.title}`);
+      return;
+    }
+
+    if (subcommand === 'done') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = completeTask(opts.task, opts.result || null);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} completed: ${task.title}`);
+      return;
+    }
+
+    if (subcommand === 'fail') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = failTask(opts.task, opts.reason || null);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} failed: ${task.title}`);
+      return;
+    }
+
+    if (subcommand === 'cancel') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = cancelTask(opts.task);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} cancelled`);
+      return;
+    }
+
+    if (subcommand === 'next') {
+      if (!opts.agent) { console.error('Error: --agent is required'); process.exit(1); }
+      const task = nextTask(opts.agent);
+      if (!task) { console.log(`No queued tasks for ${opts.agent}`); return; }
+      console.log(`Next task: ${task.id}  ${task.title}  (priority: ${task.priority})`);
+      return;
+    }
+
+    if (subcommand === 'status' || !subcommand || subcommand === 'list') {
+      const data = missionControlData();
+      if (data.total === 0) { console.log('No tasks.'); return; }
+      console.log(`Mission Control: ${data.active} active, ${data.queued} queued, ${data.total} total\n`);
+      for (const a of data.agents) {
+        const current = a.current ? `→ ${a.current.title}` : '(idle)';
+        console.log(`  ${a.agent.padEnd(15)} ${current}  [${a.queued} queued, ${a.done} done, ${a.failed} failed]`);
+      }
+      return;
+    }
+
+    console.error('Usage: ide-agent-kit tasks <add|start|done|fail|cancel|next|status>');
     process.exit(1);
   }
 
