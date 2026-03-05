@@ -37,7 +37,19 @@ function saveSeenIds(path, ids) {
   writeFileSync(path, arr.join('\n') + '\n');
 }
 
-function nudgeTmux(session, text) {
+function nudgeIde(session, text) {
+  // 1. Try native Antigravity IDE webhook / CLI if available (GUI Agent hook)
+  const agCliPath = '/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity';
+  if (import('node:fs').then(fs => fs.existsSync(agCliPath)).catch(() => false) || require('fs').existsSync(agCliPath)) {
+    try {
+      execSync(`"${agCliPath}" chat -r ${JSON.stringify(text)}`);
+      return true;
+    } catch (e) {
+      // Fallback if it fails
+    }
+  }
+
+  // 2. Fallback to standard tmux keystroke injection (CLI Agent hook)
   try {
     execSync(`tmux has-session -t ${JSON.stringify(session)} 2>/dev/null`);
   } catch {
@@ -165,7 +177,7 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
       appendFileSync(notifyFile, newMessages.join('\n') + '\n');
 
       // Secondary: try tmux nudge (bonus if IDE is in tmux)
-      const nudged = nudgeTmux(session, nudgeText);
+      const nudged = nudgeIde(session, nudgeText);
       console.log(`  ${newCount} new message(s) → notified${nudged ? ' + tmux nudge' : ''}`);
     }
   }
