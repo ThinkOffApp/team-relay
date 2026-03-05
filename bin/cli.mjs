@@ -20,7 +20,8 @@ import { discordAdapter } from '../src/team-relay/adapters/discord.mjs';
 import { xforAdapter } from '../src/team-relay/adapters/xfor.mjs';
 import { commentsAdapter } from '../src/team-relay/adapters/comments.mjs';
 import { isEnabled as acpIsEnabled, createSession as acpCreate, sendToSession as acpSend, closeSession as acpClose, getSession as acpGet, listSessions as acpList } from '../src/team-relay/acp-sessions.mjs';
-import { initTaskQueue, addTask, startTask, completeTask, failTask, cancelTask, listTasks, nextTask, missionControlData } from '../src/team-relay/task-queue.mjs';
+import { initTaskQueue, addTask, startTask, completeTask, failTask, cancelTask, queueTask, draftTask, installTask, vote, reviewTask, setStatus, listTasks, nextTask, missionControlData } from '../src/team-relay/task-queue.mjs';
+import { startMissionControl } from '../src/team-relay/mission-control.mjs';
 // --- ide-specific ---
 import { tmuxRun } from '../src/ide/tmux-runner.mjs';
 import { watchQueue } from '../src/ide/watch.mjs';
@@ -986,8 +987,26 @@ async function main() {
 
     if (subcommand === 'add') {
       if (!opts.agent || !opts.title) { console.error('Error: --agent and --title are required'); process.exit(1); }
-      const task = addTask(opts.agent, opts.title, { priority: parseInt(opts.priority || '0', 10) });
-      console.log(`Task added: ${task.id}  ${task.agent}  ${task.title}`);
+      const task = addTask(opts.agent, opts.title, { priority: parseInt(opts.priority || '0', 10), type: opts.type || 'feature' });
+      console.log(`Task added: ${task.id}  [${task.type}]  ${task.agent}  ${task.title}  (${task.status})`);
+      return;
+    }
+
+    if (subcommand === 'vote') {
+      if (!opts.task || !opts.agent || !opts.decision) { console.error('Error: --task, --agent, and --decision (approve|reject) are required'); process.exit(1); }
+      const task = vote(opts.task, opts.agent, opts.decision);
+      if (!task) { console.error('Task not found or invalid decision'); process.exit(1); }
+      const approves = Object.values(task.votes).filter(v => v === 'approve').length;
+      const rejects = Object.values(task.votes).filter(v => v === 'reject').length;
+      console.log(`Vote recorded: ${opts.agent} → ${opts.decision}  [${approves} approve, ${rejects} reject]  Status: ${task.status}`);
+      return;
+    }
+
+    if (subcommand === 'queue') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = queueTask(opts.task);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} queued: ${task.title}`);
       return;
     }
 
@@ -995,7 +1014,32 @@ async function main() {
       if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
       const task = startTask(opts.task);
       if (!task) { console.error('Task not found'); process.exit(1); }
-      console.log(`Task ${task.id} started: ${task.title}`);
+      console.log(`Task ${task.id} active: ${task.title}`);
+      return;
+    }
+
+    if (subcommand === 'draft') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = draftTask(opts.task);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} drafted (review round ${task.review_round}): ${task.title}`);
+      return;
+    }
+
+    if (subcommand === 'review') {
+      if (!opts.task || !opts.reviewer || !opts.decision) { console.error('Error: --task, --reviewer, and --decision (approve|changes_requested) are required'); process.exit(1); }
+      const task = reviewTask(opts.task, opts.reviewer, opts.decision);
+      if (!task) { console.error('Task not found, self-review, or invalid decision'); process.exit(1); }
+      const approvals = Object.values(task.reviews).filter(v => v === 'approve').length;
+      console.log(`Review: ${opts.reviewer} → ${opts.decision}  [${approvals} approvals]  Status: ${task.status}`);
+      return;
+    }
+
+    if (subcommand === 'install') {
+      if (!opts.task) { console.error('Error: --task is required'); process.exit(1); }
+      const task = installTask(opts.task);
+      if (!task) { console.error('Task not found'); process.exit(1); }
+      console.log(`Task ${task.id} installed: ${task.title}`);
       return;
     }
 
@@ -1034,15 +1078,21 @@ async function main() {
     if (subcommand === 'status' || !subcommand || subcommand === 'list') {
       const data = missionControlData();
       if (data.total === 0) { console.log('No tasks.'); return; }
-      console.log(`Mission Control: ${data.active} active, ${data.queued} queued, ${data.total} total\n`);
+      console.log(`Mission Control: ${data.active} active, ${data.queued} queued, ${data.proposed} proposed, ${data.total} total\n`);
       for (const a of data.agents) {
         const current = a.current ? `→ ${a.current.title}` : '(idle)';
-        console.log(`  ${a.agent.padEnd(15)} ${current}  [${a.queued} queued, ${a.done} done, ${a.failed} failed]`);
+        console.log(`  ${a.agent.padEnd(15)} ${current}  [${a.queued}q ${a.drafted}d ${a.installed}i ${a.done}✓ ${a.failed}✗]`);
       }
       return;
     }
 
-    console.error('Usage: ide-agent-kit tasks <add|start|done|fail|cancel|next|status>');
+    if (subcommand === 'serve') {
+      const port = parseInt(opts.port || '4800', 10);
+      startMissionControl(config, port);
+      return;
+    }
+
+    console.error('Usage: ide-agent-kit tasks <add|vote|queue|start|draft|review|install|done|fail|cancel|next|status|serve>');
     process.exit(1);
   }
 
