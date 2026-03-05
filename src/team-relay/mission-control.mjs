@@ -11,180 +11,133 @@ const HTML = `<!DOCTYPE html>
 <title>Mission Control — IDE Agent Kit</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; background: #0d1117; color: #c9d1d9; padding: 20px; max-width: 900px; margin: 0 auto; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; background: #0d1117; color: #c9d1d9; padding: 20px; }
   h1 { color: #58a6ff; margin-bottom: 4px; font-size: 1.4em; }
   .subtitle { color: #8b949e; margin-bottom: 20px; font-size: 0.85em; }
-  .view-toggle { margin-bottom: 16px; }
-  .view-toggle button { padding: 6px 14px; border-radius: 6px; border: 1px solid #30363d; background: #161b22; color: #8b949e; cursor: pointer; margin-right: 4px; font-size: 0.85em; }
-  .view-toggle button.active { color: #c9d1d9; border-color: #58a6ff; background: #1c2333; }
-  .section { margin-bottom: 24px; }
-  .section-header { font-size: 1.1em; font-weight: bold; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #30363d; }
-  .section-header.review { color: #d29922; }
-  .section-header.ready { color: #3fb950; }
-  .section-header.pipeline { color: #58a6ff; }
-  .task-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
+  .column { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 18px; min-height: 200px; }
+  .column-header { font-size: 1.1em; font-weight: bold; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+  .column-header.proposals { color: #d29922; }
+  .column-header.implementation { color: #58a6ff; }
+  .column-count { font-size: 0.8em; font-weight: normal; color: #8b949e; }
+  .group { margin-bottom: 14px; }
+  .group-label { font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; margin-bottom: 6px; }
+  .group-label.recommended { color: #3fb950; }
+  .group-label.to_review { color: #d29922; }
+  .group-label.discarded { color: #f85149; }
+  .group-label.queued { color: #8b949e; }
+  .group-label.active { color: #58a6ff; }
+  .group-label.drafted { color: #bc8cff; }
+  .group-label.to_install { color: #3fb950; }
+  .group-label.installed { color: #3fb950; }
+  .task-card { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
   .task-card.recommended { border-left: 3px solid #3fb950; }
   .task-card.to_review, .task-card.proposed { border-left: 3px solid #d29922; }
-  .task-card.discarded { border-left: 3px solid #f85149; opacity: 0.6; }
+  .task-card.discarded { border-left: 3px solid #f85149; opacity: 0.5; }
+  .task-card.queued { border-left: 3px solid #8b949e; }
+  .task-card.active { border-left: 3px solid #58a6ff; }
   .task-card.drafted { border-left: 3px solid #bc8cff; }
   .task-card.to_install { border-left: 3px solid #3fb950; }
-  .task-card.active { border-left: 3px solid #58a6ff; }
-  .task-card.queued { border-left: 3px solid #8b949e; }
-  .task-card.installed { border-left: 3px solid #3fb950; opacity: 0.8; }
-  .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-  .task-title { font-weight: bold; flex: 1; }
+  .task-card.installed { border-left: 3px solid #3fb950; opacity: 0.7; }
+  .task-header { display: flex; justify-content: space-between; align-items: center; }
+  .task-title { font-weight: bold; font-size: 0.9em; flex: 1; }
   .task-title.recommended { color: #3fb950; }
   .task-title.to_review, .task-title.proposed { color: #d29922; }
   .task-title.discarded { color: #f85149; }
-  .task-meta { color: #8b949e; font-size: 0.8em; }
-  .badge { padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold; display: inline-block; margin-left: 4px; }
+  .task-meta { color: #8b949e; font-size: 0.75em; margin-top: 2px; }
+  .badge { padding: 1px 7px; border-radius: 10px; font-size: 0.7em; font-weight: bold; display: inline-block; margin-left: 4px; }
   .badge.feature { background: #1f6feb; color: #fff; }
   .badge.bug { background: #f85149; color: #fff; }
   .badge.approve { background: #238636; color: #fff; }
   .badge.reject { background: #da3633; color: #fff; }
   .badge.changes_requested { background: #d29922; color: #0d1117; }
   .badge.escalated { background: #f85149; color: #fff; }
-  .badge.status { background: #30363d; color: #c9d1d9; }
-  .votes, .reviews { margin-top: 4px; font-size: 0.85em; }
-  .votes span, .reviews span { margin-right: 8px; }
+  .votes, .reviews { margin-top: 3px; font-size: 0.8em; }
+  .votes span, .reviews span { margin-right: 6px; }
   .agent-tag { color: #58a6ff; }
-  .empty { color: #8b949e; padding: 16px; text-align: center; font-style: italic; }
+  .empty { color: #484f58; padding: 12px; text-align: center; font-style: italic; font-size: 0.85em; }
+  .toggle-link { color: #8b949e; font-size: 0.75em; cursor: pointer; text-decoration: underline; }
   .collapsed { display: none; }
-  .toggle-link { color: #8b949e; font-size: 0.8em; cursor: pointer; text-decoration: underline; margin-left: 8px; }
-  .stats-bar { display: flex; gap: 16px; margin-bottom: 20px; font-size: 0.85em; color: #8b949e; }
-  .stats-bar .num { font-weight: bold; color: #c9d1d9; }
-  .refresh { color: #484f58; font-size: 0.7em; margin-top: 16px; }
-  /* Detailed tab view */
-  .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
-  .tab { padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8em; border: 1px solid #30363d; background: #161b22; color: #8b949e; }
-  .tab.active { color: #c9d1d9; border-color: #58a6ff; background: #1c2333; }
-  .tab .count { margin-left: 4px; font-size: 0.85em; color: #484f58; }
+  .refresh { color: #484f58; font-size: 0.7em; margin-top: 16px; text-align: center; }
 </style>
 </head>
 <body>
 <h1>Mission Control</h1>
 <p class="subtitle">IDE Agent Kit — team-relay</p>
-<div class="view-toggle">
-  <button id="btn-main" class="active" onclick="setView('main')">Main</button>
-  <button id="btn-detail" onclick="setView('detail')">Detailed</button>
-</div>
-<div class="stats-bar" id="stats"></div>
-<div id="main-view"></div>
-<div id="detail-view" style="display:none"></div>
+<div class="columns" id="app"><div class="empty">Loading...</div></div>
 <p class="refresh">Auto-refreshes every 5s</p>
 <script>
-let view = 'main';
-let currentTab = 'proposed';
-let discardedVisible = false;
-const TAB_ORDER = ['proposed','recommended','to_review','discarded','queued','active','drafted','to_install','installed','done'];
-const TAB_LABELS = {proposed:'To Review',recommended:'Recommended',to_review:'To Review',discarded:'Discarded',queued:'Queued',active:'Active',drafted:'Drafted',to_install:'To Install',installed:'Installed',done:'Done'};
-
-function setView(v) {
-  view = v;
-  document.getElementById('btn-main').className = v==='main'?'active':'';
-  document.getElementById('btn-detail').className = v==='detail'?'active':'';
-  document.getElementById('main-view').style.display = v==='main'?'block':'none';
-  document.getElementById('detail-view').style.display = v==='detail'?'block':'none';
-  load();
-}
+let showDiscarded = false;
 
 function taskCard(task) {
-  const statusClass = task.status;
-  const titleClass = ['recommended','to_review','proposed','discarded'].includes(task.status) ? 'task-title '+task.status : 'task-title';
-  let html = '<div class="task-card '+statusClass+'">';
-  html += '<div class="task-header"><span class="'+titleClass+'">'+task.title+'</span>';
-  html += '<span class="badge '+task.type+'">'+task.type+'</span>';
-  if (task.escalated) html += '<span class="badge escalated">escalated</span>';
-  if (['queued','active','drafted','to_install','installed','done'].includes(task.status)) {
-    html += '<span class="badge status">'+task.status.replace('_',' ')+'</span>';
-  }
-  html += '</div>';
-  html += '<div class="task-meta"><span class="agent-tag">@'+task.agent+'</span> &middot; '+task.id+' &middot; '+task.updated.slice(0,16)+'</div>';
+  const titleCls = ['recommended','to_review','proposed','discarded'].includes(task.status) ? 'task-title '+task.status : 'task-title';
+  let h = '<div class="task-card '+task.status+'">';
+  h += '<div class="task-header"><span class="'+titleCls+'">'+task.title+'</span>';
+  h += '<span class="badge '+task.type+'">'+task.type+'</span>';
+  if (task.escalated) h += '<span class="badge escalated">!</span>';
+  h += '</div>';
+  h += '<div class="task-meta"><span class="agent-tag">@'+task.agent+'</span> &middot; '+task.id+'</div>';
   if (Object.keys(task.votes||{}).length > 0) {
-    html += '<div class="votes">Votes: ';
+    h += '<div class="votes">';
     for (const [a,v] of Object.entries(task.votes)) {
-      html += '<span><span class="agent-tag">@'+a+'</span> <span class="badge '+v+'">'+v+'</span></span>';
+      h += '<span><span class="agent-tag">@'+a+'</span> <span class="badge '+v+'">'+v+'</span></span>';
     }
-    html += '</div>';
+    h += '</div>';
   }
   if (Object.keys(task.reviews||{}).length > 0) {
-    html += '<div class="reviews">Reviews (round '+task.review_round+'): ';
+    h += '<div class="reviews">Round '+task.review_round+': ';
     for (const [a,v] of Object.entries(task.reviews)) {
-      html += '<span><span class="agent-tag">@'+a+'</span> <span class="badge '+v+'">'+v.replace('_',' ')+'</span></span>';
+      h += '<span><span class="agent-tag">@'+a+'</span> <span class="badge '+v+'">'+(v==='changes_requested'?'changes':v)+'</span></span>';
     }
-    html += '</div>';
+    h += '</div>';
   }
-  html += '</div>';
-  return html;
+  h += '</div>';
+  return h;
+}
+
+function renderGroup(label, cls, items) {
+  if (items.length === 0) return '';
+  let h = '<div class="group"><div class="group-label '+cls+'">'+label+' ('+items.length+')</div>';
+  for (const t of items) h += taskCard(t);
+  h += '</div>';
+  return h;
 }
 
 async function load() {
   const data = await fetch('/api/status').then(r=>r.json());
-  // Stats bar
-  document.getElementById('stats').innerHTML =
-    '<span>Review: <span class="num">'+(data.tabs.proposed.length+data.tabs.recommended.length+data.tabs.to_review.length)+'</span></span>'+
-    '<span>Ready: <span class="num">'+(data.tabs.drafted.length+data.tabs.to_install.length)+'</span></span>'+
-    '<span>Active: <span class="num">'+data.active+'</span></span>'+
-    '<span>Queued: <span class="num">'+data.queued+'</span></span>'+
-    '<span>Total: <span class="num">'+data.total+'</span></span>';
+  const tabs = data.tabs;
+  let left = '', right = '';
 
-  if (view === 'main') renderMain(data);
-  else renderDetail(data);
-}
-
-function renderMain(data) {
-  let html = '';
-  // Section 1: Review (recommended first, then to_review + proposed, discarded collapsed)
-  const reviewItems = [...data.tabs.recommended, ...data.tabs.to_review, ...data.tabs.proposed];
-  const discardedItems = data.tabs.discarded;
-  html += '<div class="section"><div class="section-header review">Review &middot; '+reviewItems.length+' items</div>';
-  if (reviewItems.length === 0) html += '<div class="empty">Nothing to review</div>';
-  for (const t of reviewItems) html += taskCard(t);
-  if (discardedItems.length > 0) {
-    html += '<span class="toggle-link" onclick="discardedVisible=!discardedVisible;load()">'+
-      (discardedVisible?'Hide':'Show')+' '+discardedItems.length+' discarded</span>';
-    if (discardedVisible) for (const t of discardedItems) html += taskCard(t);
+  // LEFT: Proposals
+  const reviewItems = [...tabs.proposed, ...tabs.to_review];
+  left += renderGroup('Recommended', 'recommended', tabs.recommended);
+  left += renderGroup('To Review', 'to_review', reviewItems);
+  if (tabs.discarded.length > 0) {
+    left += '<span class="toggle-link" onclick="showDiscarded=!showDiscarded;load()">'+(showDiscarded?'Hide':'Show')+' '+tabs.discarded.length+' discarded</span>';
+    if (showDiscarded) left += renderGroup('Discarded', 'discarded', tabs.discarded);
   }
-  html += '</div>';
+  if (!left) left = '<div class="empty">No proposals</div>';
 
-  // Section 2: Ready (drafted, to_install)
-  const readyItems = [...data.tabs.drafted, ...data.tabs.to_install];
-  html += '<div class="section"><div class="section-header ready">Ready &middot; '+readyItems.length+' items</div>';
-  if (readyItems.length === 0) html += '<div class="empty">Nothing ready for review or install</div>';
-  for (const t of readyItems) html += taskCard(t);
-  html += '</div>';
-
-  // Pipeline (active, queued, installed — collapsed)
-  const pipelineItems = [...data.tabs.active, ...data.tabs.queued];
-  const doneItems = [...data.tabs.installed, ...data.tabs.done];
-  if (pipelineItems.length > 0 || doneItems.length > 0) {
-    html += '<div class="section"><div class="section-header pipeline">Pipeline &middot; '+pipelineItems.length+' in progress</div>';
-    for (const t of pipelineItems) html += taskCard(t);
-    if (doneItems.length > 0) {
-      html += '<span class="toggle-link" onclick="document.getElementById(\\'done-list\\').classList.toggle(\\'collapsed\\');load()">'+doneItems.length+' completed</span>';
-      html += '<div id="done-list" class="collapsed">';
-      for (const t of doneItems) html += taskCard(t);
-      html += '</div>';
-    }
-    html += '</div>';
+  // RIGHT: Implementation
+  right += renderGroup('Active', 'active', tabs.active);
+  right += renderGroup('Queued', 'queued', tabs.queued);
+  right += renderGroup('Drafted', 'drafted', tabs.drafted);
+  right += renderGroup('To Install', 'to_install', tabs.to_install);
+  right += renderGroup('Installed / Running', 'installed', tabs.installed);
+  if (tabs.done.length > 0) {
+    right += '<span class="toggle-link" onclick="document.getElementById(\\'done-list\\').classList.toggle(\\'collapsed\\')">'+tabs.done.length+' completed</span>';
+    right += '<div id="done-list" class="collapsed">'+renderGroup('Done', 'installed', tabs.done)+'</div>';
   }
-  document.getElementById('main-view').innerHTML = html;
-}
+  if (!right) right = '<div class="empty">No implementation work</div>';
 
-function renderDetail(data) {
-  let html = '<div class="tabs">';
-  for (const t of TAB_ORDER) {
-    const count = (data.tabs[t]||[]).length;
-    const cls = t === currentTab ? 'tab active' : 'tab';
-    html += '<div class="'+cls+'" onclick="currentTab=\\''+t+'\\';load()">'+TAB_LABELS[t]+'<span class="count">'+count+'</span></div>';
-  }
-  html += '</div>';
-  const items = data.tabs[currentTab]||[];
-  if (items.length === 0) html += '<div class="empty">No tasks in this tab</div>';
-  for (const t of items) html += taskCard(t);
-  document.getElementById('detail-view').innerHTML = html;
-}
+  const proposalCount = tabs.recommended.length + reviewItems.length + tabs.discarded.length;
+  const implCount = tabs.active.length + tabs.queued.length + tabs.drafted.length + tabs.to_install.length + tabs.installed.length + tabs.done.length;
 
+  document.getElementById('app').innerHTML =
+    '<div class="column"><div class="column-header proposals">Proposals <span class="column-count">'+proposalCount+'</span></div>'+left+'</div>'+
+    '<div class="column"><div class="column-header implementation">Implementation <span class="column-count">'+implCount+'</span></div>'+right+'</div>';
+}
 load();
 setInterval(load, 5000);
 </script>
