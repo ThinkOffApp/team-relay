@@ -57,7 +57,7 @@ async function fetchRoomMessages(room, apiKey, limit = 10) {
   const url = `https://antfarm.world/api/v1/rooms/${room}/messages?limit=${limit}`;
   try {
     const result = execSync(
-      `curl -sS -H "X-API-Key: ${apiKey}" "${url}"`,
+      `curl -sS -4 -H "X-API-Key: ${apiKey}" "${url}"`,
       { encoding: 'utf8', timeout: 15000 }
     );
     const data = JSON.parse(result);
