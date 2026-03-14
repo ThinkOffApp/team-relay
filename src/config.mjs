@@ -8,6 +8,15 @@ const DEFAULT_CONFIG = {
   queue: { path: './ide-agent-queue.jsonl' },
   receipts: { path: './ide-agent-receipts.jsonl', stdout_tail_lines: 80 },
   tmux: { default_session: 'iak-runner', ide_session: 'claude', nudge_text: 'check rooms', allow: [] },
+  poller: {
+    rooms: '',
+    handle: '',
+    interval_sec: 30,
+    seen_file: '/tmp/iak-seen-ids.txt',
+    api_key: '',
+    nudge_mode: 'tmux',
+    nudge_command: ''
+  },
   github: { webhook_secret: '', event_kinds: ['pull_request', 'issue_comment', 'check_suite', 'workflow_run'] },
   outbound: { default_webhook_url: '' }
 };
@@ -21,6 +30,7 @@ export function loadConfig(configPath) {
     queue: { ...DEFAULT_CONFIG.queue, ...raw.queue },
     receipts: { ...DEFAULT_CONFIG.receipts, ...raw.receipts },
     tmux: { ...DEFAULT_CONFIG.tmux, ...raw.tmux },
+    poller: { ...DEFAULT_CONFIG.poller, ...raw.poller },
     github: { ...DEFAULT_CONFIG.github, ...raw.github },
     outbound: { ...DEFAULT_CONFIG.outbound, ...raw.outbound }
   };

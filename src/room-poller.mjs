@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { execSync } from 'node:child_process';
+import { nudgeTmux, nudgeCommand } from './utils.mjs';
 
 /**
  * Room Poller — polls Ant Farm room API directly and nudges IDE tmux session.
@@ -30,27 +31,11 @@ function saveSeenIds(path, ids) {
   writeFileSync(path, arr.join('\n') + '\n');
 }
 
-function nudgeTmux(session, text) {
-  try {
-    execSync(`tmux has-session -t ${JSON.stringify(session)} 2>/dev/null`);
-  } catch {
-    return false;
-  }
-  try {
-    execSync(`tmux send-keys -t ${JSON.stringify(session)} -l ${JSON.stringify(text)}`);
-    execSync('sleep 0.3');
-    execSync(`tmux send-keys -t ${JSON.stringify(session)} Enter`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function fetchRoomMessages(room, apiKey, limit = 10) {
   const url = `https://antfarm.world/api/v1/rooms/${room}/messages?limit=${limit}`;
   try {
     const result = execSync(
-      `curl -sS -H "X-API-Key: ${apiKey}" "${url}"`,
+      `curl -sS -H "Authorization: Bearer ${apiKey}" "${url}"`,
       { encoding: 'utf8', timeout: 15000 }
     );
     const data = JSON.parse(result);
@@ -66,22 +51,30 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
   const queuePath = config?.queue?.path || './ide-agent-queue.jsonl';
   const session = config?.tmux?.ide_session || config?.tmux?.default_session || 'claude';
   const nudgeText = config?.tmux?.nudge_text || 'check rooms';
+  const nudgeMode = config?.poller?.nudge_mode || 'tmux';
+  const nudgeCommandText = config?.poller?.nudge_command || '';
   const pollInterval = interval || config?.poller?.interval_sec || 30;
   const selfHandle = handle || config?.poller?.handle || '@unknown';
 
-  console.log(`Room poller started`);
+  console.log('Room poller started');
   console.log(`  rooms: ${rooms.join(', ')}`);
   console.log(`  handle: ${selfHandle} (messages from self are ignored)`);
   console.log(`  interval: ${pollInterval}s`);
-  console.log(`  tmux session: ${session}`);
+  console.log(`  nudge mode: ${nudgeMode}`);
+  if (nudgeMode === 'tmux') {
+    console.log(`  tmux session: ${session}`);
+  } else if (nudgeMode === 'command') {
+    console.log(`  nudge command: ${nudgeCommandText || '(missing)'}`);
+  }
   console.log(`  seen file: ${seenFile}`);
   console.log(`  queue: ${queuePath}`);
+  console.log('  auto-ack: disabled (real replies only)');
 
   const seen = loadSeenIds(seenFile);
 
   // Seed: mark current messages as seen on first run
   if (seen.size === 0) {
-    console.log(`  seeding seen IDs from current messages...`);
+    console.log('  seeding seen IDs from current messages...');
     for (const room of rooms) {
       const msgs = await fetchRoomMessages(room, apiKey, 50);
       for (const m of msgs) {
@@ -90,57 +83,6 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
     }
     saveSeenIds(seenFile, seen);
     console.log(`  seeded ${seen.size} IDs`);
-  }
-
-  const ackEnabled = config?.poller?.ack_enabled !== false;
-  const ownerHandle = (config?.poller?.owner_handle || 'petrus').toLowerCase();
-
-  const TASK_HINTS = [
-    'can you', 'please', 'need to', 'check', 'fix', 'update', 'review',
-    'run', 'deploy', 'implement', 'test', 'restart', 'install', 'respond',
-    'post', 'pull', 'push', 'merge'
-  ];
-
-  function extractMentions(text) {
-    const matches = text.match(/@([a-zA-Z0-9_.-]+)/g) || [];
-    return matches.map(m => m.toLowerCase());
-  }
-
-  function messageTargetsMe(body) {
-    const mentions = extractMentions(body);
-    const myShort = selfHandle.toLowerCase().replace('@', '');
-    if (mentions.length > 0) {
-      return mentions.some(m => m.replace('@', '') === myShort);
-    }
-    return true; // Treat generic owner imperatives as targeted
-  }
-
-  function looksLikeTaskRequest(body) {
-    const text = (body || '').trim().toLowerCase();
-    if (!text) return false;
-    return TASK_HINTS.some(hint => text.includes(hint));
-  }
-
-  function shouldAck(sender, body) {
-    const fromOwner = sender.toLowerCase().includes(ownerHandle);
-    if (!fromOwner) return false;
-    if (!messageTargetsMe(body)) return false;
-    return looksLikeTaskRequest(body);
-  }
-
-  async function postAck(room) {
-    const payload = JSON.stringify({
-      room,
-      body: `@${ownerHandle} [${selfHandle.replace('@', '')}] starting now. I will report back when finished with results.`
-    });
-    try {
-      execSync(
-        `curl -sS -X POST "https://antfarm.world/api/v1/messages" -H "X-API-Key: ${apiKey}" -H "Content-Type: application/json" -d '${payload.replace(/'/g, "'\\''")}'`,
-        { timeout: 15000 }
-      );
-    } catch (e) {
-      console.error(`  post ack failed: ${e.message}`);
-    }
   }
 
   async function poll() {
@@ -174,19 +116,21 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
         newCount++;
 
         console.log(`  [${ts.slice(0, 19)}] ${sender} in ${room}: ${body.slice(0, 80)}...`);
-
-        if (ackEnabled && shouldAck(sender, body)) {
-          await postAck(room);
-          console.log(`  posted auto-ack for task from ${sender}`);
-        }
       }
     }
 
     saveSeenIds(seenFile, seen);
 
     if (newCount > 0) {
-      const nudged = nudgeTmux(session, nudgeText);
-      console.log(`  ${newCount} new message(s) → ${nudged ? 'nudged' : 'no tmux session'}`);
+      let nudged = false;
+      if (nudgeMode === 'command') {
+        nudged = nudgeCommand(nudgeCommandText, { text: nudgeText, session });
+      } else if (nudgeMode === 'none') {
+        nudged = true;
+      } else {
+        nudged = nudgeTmux(session, nudgeText);
+      }
+      console.log(`  ${newCount} new message(s) → ${nudged ? 'nudged' : 'nudge failed'}`);
     }
   }
 
@@ -197,21 +141,26 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
   const timer = setInterval(poll, pollInterval * 1000);
 
   // Anti-sleep heartbeat (keeps terminal pseudo-active to prevent display-sleep freeze)
-  const heartbeat = setInterval(() => {
-    try {
-      execSync(`tmux send-keys -t ${JSON.stringify(session)} Escape`);
-    } catch { }
-  }, 4 * 60 * 1000);
+  const heartbeat = nudgeMode === 'tmux'
+    ? setInterval(() => {
+      try {
+        execSync(`tmux send-keys -t ${JSON.stringify(session)} Escape`);
+      } catch {
+        // no-op
+      }
+    }, 4 * 60 * 1000)
+    : null;
 
   // Handle shutdown
   process.on('SIGINT', () => {
     console.log('\nPoller stopped.');
     clearInterval(timer);
-    clearInterval(heartbeat);
+    if (heartbeat) clearInterval(heartbeat);
     process.exit(0);
   });
   process.on('SIGTERM', () => {
     clearInterval(timer);
+    if (heartbeat) clearInterval(heartbeat);
     process.exit(0);
   });
 
